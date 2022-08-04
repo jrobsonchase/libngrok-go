@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -455,6 +456,35 @@ func TestTCPIPRestriction(t *testing.T) {
 
 	// Rather than layer-7 error, we should see it at the connection level
 	require.Error(t, err, "GET Tunnel URL")
+
+	require.NoError(t, tun.Close())
+	require.Error(t, <-exited)
+}
+
+func TestLabeled(t *testing.T) {
+
+	ctx := context.Background()
+	tun, exited := serveHTTP(ctx, t,
+		LabeledOptions().WithLabel("edge", "edghts_2CtuOWQFCrvggKT34fRCFXs0AiK"),
+		helloHandler,
+	)
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+
+	for {
+		require.NoError(t, ctx.Err(), "context deadline reached while waiting for edge")
+		resp, err := http.Get("https://kzu7214a.ngrok.io/")
+		require.NoError(t, err, "GET tunnel url")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err, "Read response body")
+
+		if string(body) == "Hello, world!\n" {
+			break
+		}
+	}
+
+	cancel()
 
 	require.NoError(t, tun.Close())
 	require.Error(t, <-exited)

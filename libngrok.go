@@ -109,8 +109,6 @@ type HTTPConfig struct {
 	parent *TunnelConfig
 
 	Scheme         Scheme
-	Hostname       string
-	Subdomain      string
 	Compression    bool
 	CircuitBreaker float64
 
@@ -120,13 +118,18 @@ type HTTPConfig struct {
 	BasicAuth           *BasicAuth
 	OAuth               *OAuth
 	WebhookVerification *WebhookVerification
-
-	MutualTLSCA []byte
 }
 
 type TCPConfig struct {
 	parent     *TunnelConfig
 	RemoteAddr string
+}
+
+type TLSConfig struct{}
+
+type LabeledConfig struct {
+	parent *TunnelConfig
+	Labels map[string]string
 }
 
 type IPRestriction struct {
@@ -160,15 +163,21 @@ func (ir *IPRestriction) toProtoConfig() *pb_agent.MiddlewareConfiguration_IPRes
 }
 
 type CommonConfig struct {
+	Subdomain      string
+	Hostname       string
 	parent         *TunnelConfig
 	IPRestrictions *IPRestriction
 	ProxyProto     ProxyProtoVersion
+
+	MutualTLSCA []byte
 }
 
 type TunnelConfig struct {
 	*CommonConfig
 	*HTTPConfig
 	*TCPConfig
+	*LabeledConfig
+	*TLSConfig
 }
 
 func newTunnelConfig() *TunnelConfig {
@@ -191,42 +200,49 @@ func HTTPOptions() *TunnelConfig {
 	return opts
 }
 
+func LabeledOptions() *TunnelConfig {
+	opts := newTunnelConfig()
+	opts.LabeledConfig = &LabeledConfig{
+		Labels: map[string]string{},
+		parent: opts,
+	}
+	return opts
+}
+
+func TLSOptions() *TunnelConfig {
+	opts := newTunnelConfig()
+	opts.TLSConfig = &TLSConfig{}
+	return opts
+}
+
 func (http *HTTPConfig) WithScheme(scheme Scheme) *TunnelConfig {
 	http.Scheme = scheme
 	return http.parent
 }
 
-func (http *HTTPConfig) WithSubdomain(domain string) *TunnelConfig {
-	http.Subdomain = domain
-	return http.parent
+func (cfg *CommonConfig) WithSubdomain(domain string) *TunnelConfig {
+	cfg.Subdomain = domain
+	return cfg.parent
 }
 
-func (http *HTTPConfig) WithHostname(hostname string) *TunnelConfig {
-	http.Hostname = hostname
-	return &TunnelConfig{
-		HTTPConfig: http,
-	}
+func (cfg *CommonConfig) WithHostname(hostname string) *TunnelConfig {
+	cfg.Hostname = hostname
+	return cfg.parent
 }
 
 func (http *HTTPConfig) WithCompression() *TunnelConfig {
 	http.Compression = true
-	return &TunnelConfig{
-		HTTPConfig: http,
-	}
+	return http.parent
 }
 
 func (http *HTTPConfig) WithCircuitBreaker(ratio float64) *TunnelConfig {
 	http.CircuitBreaker = ratio
-	return &TunnelConfig{
-		HTTPConfig: http,
-	}
+	return http.parent
 }
 
 func (http *HTTPConfig) WithRequestHeaders(headers *Headers) *TunnelConfig {
 	http.RequestHeaders = headers
-	return &TunnelConfig{
-		HTTPConfig: http,
-	}
+	return http.parent
 }
 
 func (http *HTTPConfig) WithResponseHeaders(headers *Headers) *TunnelConfig {
@@ -298,9 +314,9 @@ func (http *HTTPConfig) WithBasicAuth(username, password string) *TunnelConfig {
 	return http.parent
 }
 
-func (http *HTTPConfig) WithMutualTLS(caBytes []byte) *TunnelConfig {
-	http.MutualTLSCA = caBytes
-	return http.parent
+func (cfg *CommonConfig) WithMutualTLS(caBytes []byte) *TunnelConfig {
+	cfg.MutualTLSCA = caBytes
+	return cfg.parent
 }
 
 func (cfg *CommonConfig) WithProxyProto(version ProxyProtoVersion) *TunnelConfig {
@@ -333,8 +349,8 @@ func (wv *WebhookVerification) toProtoConfig() *pb_agent.MiddlewareConfiguration
 
 func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	opts := &proto.HTTPOptions{
-		Hostname:  http.Hostname,
-		Subdomain: http.Subdomain,
+		Hostname:  http.parent.Hostname,
+		Subdomain: http.parent.Subdomain,
 	}
 
 	if http.Compression {
@@ -347,9 +363,9 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 		}
 	}
 
-	if http.MutualTLSCA != nil {
+	if http.parent.MutualTLSCA != nil {
 		opts.MutualTLSCA = &pb_agent.MiddlewareConfiguration_MutualTLS{
-			MutualTLSCA: http.MutualTLSCA,
+			MutualTLSCA: http.parent.MutualTLSCA,
 		}
 	}
 
@@ -361,6 +377,19 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	opts.OAuth = http.OAuth.toProtoConfig()
 	opts.WebhookVerification = http.WebhookVerification.toProtoConfig()
 	opts.IPRestriction = http.parent.IPRestrictions.toProtoConfig()
+
+	return opts
+}
+
+func (lo *LabeledConfig) WithLabel(key, value string) *TunnelConfig {
+	lo.Labels[key] = value
+	return lo.parent
+}
+
+func (lo *LabeledConfig) toProtoConfig() *proto.LabelOptions {
+	opts := &proto.LabelOptions{
+		Labels: lo.Labels,
+	}
 
 	return opts
 }
@@ -484,6 +513,16 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg *TunnelConfig) (Tunne
 		opts := cfg.TCPConfig.toProtoConfig()
 		listen = func() (tunnel_client.Tunnel, error) {
 			return s.TunnelSession.ListenTCP(opts, proto.BindExtra{}, "application")
+		}
+	}
+
+	if cfg.LabeledConfig != nil {
+		if listen != nil {
+			return nil, fmt.Errorf("multiple tunnel configs provided")
+		}
+		opts := cfg.LabeledConfig.toProtoConfig()
+		listen = func() (tunnel_client.Tunnel, error) {
+			return s.TunnelSession.ListenLabel(opts.Labels, "", "application")
 		}
 	}
 
