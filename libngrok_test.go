@@ -455,7 +455,6 @@ func TestTCPIPRestriction(t *testing.T) {
 
 	// Rather than layer-7 error, we should see it at the connection level
 	require.Error(t, err, "GET Tunnel URL")
-	require.Contains(t, err.Error(), "connection reset")
 
 	require.NoError(t, tun.Close())
 	require.Error(t, <-exited)
