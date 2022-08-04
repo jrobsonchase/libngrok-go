@@ -6,9 +6,10 @@ import (
 	"time"
 	"unsafe"
 
+	log "github.com/inconshreveable/log15"
 	"github.com/jpillora/backoff"
-	"github.com/ngrok/libngrok-go/tunnel/netx"
-	"github.com/ngrok/libngrok-go/tunnel/proto"
+	"github.com/ngrok/libngrok-go/internal/tunnel/netx"
+	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 )
 
 var ErrSessionNotReady = errors.New("an ngrok tunnel session has not yet been established")
@@ -120,7 +121,7 @@ type ReconnectCallback func(s Session) error
 //
 // If the stateChanges channel is not serviced by the caller, the
 // ReconnectingSession will hang.
-func NewReconnectingSession(dialer RawSessionDialer, stateChanges chan<- error, cb ReconnectCallback) Session {
+func NewReconnectingSession(logger log.Logger, dialer RawSessionDialer, stateChanges chan<- error, cb ReconnectCallback) Session {
 	swapper := new(swapRaw)
 	s := &reconnectingSession{
 		dialer:       dialer,
@@ -130,7 +131,7 @@ func NewReconnectingSession(dialer RawSessionDialer, stateChanges chan<- error, 
 		session: &session{
 			tunnels: make(map[string]*tunnel),
 			raw:     swapper,
-			Logger:  newLogger(),
+			Logger:  newLogger(logger),
 		},
 	}
 

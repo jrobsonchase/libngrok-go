@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ngrok/libngrok-go/tunnel/netx"
-	"github.com/ngrok/libngrok-go/tunnel/proto"
+	"github.com/ngrok/libngrok-go/internal/tunnel/netx"
+	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 
 	log "github.com/inconshreveable/log15"
 	logext "github.com/inconshreveable/log15/ext"
@@ -55,8 +55,8 @@ type rawSession struct {
 
 // Creates a new client tunnel session with the given id
 // running over the given muxado session.
-func NewRawSession(mux muxado.Session, heartbeatConfig *muxado.HeartbeatConfig, handler SessionHandler) RawSession {
-	return newRawSession(mux, newLogger(), heartbeatConfig, handler)
+func NewRawSession(logger log.Logger, mux muxado.Session, heartbeatConfig *muxado.HeartbeatConfig, handler SessionHandler) RawSession {
+	return newRawSession(mux, newLogger(logger), heartbeatConfig, handler)
 }
 
 func newRawSession(mux muxado.Session, logger log.Logger, heartbeatConfig *muxado.HeartbeatConfig, handler SessionHandler) RawSession {
@@ -202,7 +202,7 @@ func (s *rawSession) Accept() (netx.LoggedConn, error) {
 				go s.handler.OnUpdate(&req, respFunc)
 			}
 		default:
-			return netx.NewLoggedConn(raw, "type", "proxy", "sess", s.id), nil
+			return netx.NewLoggedConn(s.Logger, raw, "type", "proxy", "sess", s.id), nil
 		}
 	}
 }
@@ -272,6 +272,6 @@ func (s *rawSession) onHeartbeat(pingTime time.Duration) {
 	}
 }
 
-func newLogger() log.Logger {
-	return log.New("obj", "csess", "id", logext.RandId(6))
+func newLogger(parent log.Logger) log.Logger {
+	return parent.New("obj", "csess", "id", logext.RandId(6))
 }

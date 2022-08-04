@@ -1,7 +1,7 @@
 package proto
 
 import (
-	"github.com/ngrok/libngrok-go/pb_agent"
+	"github.com/ngrok/libngrok-go/internal/pb_agent"
 
 	"github.com/inconshreveable/muxado"
 )

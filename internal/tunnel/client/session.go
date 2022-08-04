@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ngrok/libngrok-go/tunnel/netx"
-	"github.com/ngrok/libngrok-go/tunnel/proto"
+	"github.com/ngrok/libngrok-go/internal/tunnel/netx"
+	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 
 	log "github.com/inconshreveable/log15"
 	muxado "github.com/inconshreveable/muxado"
@@ -80,8 +80,8 @@ type session struct {
 
 // NewSession starts a new go-tunnel client session running over the given
 // muxado session.
-func NewSession(mux muxado.Session, handler SessionHandler) Session {
-	logger := newLogger()
+func NewSession(logger log.Logger, mux muxado.Session, handler SessionHandler) Session {
+	logger = newLogger(logger)
 	s := &session{
 		raw:     newRawSession(mux, logger, nil, handler),
 		Logger:  logger,

@@ -7,8 +7,6 @@ import (
 	logext "github.com/inconshreveable/log15/ext"
 )
 
-var Log = log.New()
-
 // LoggedConn is a connection with an embedded logger
 type LoggedConn interface {
 	net.Conn
@@ -39,12 +37,12 @@ func (c *logged) Unwrap() net.Conn {
 	return c.Conn
 }
 
-func NewLoggedConn(conn net.Conn, ctx ...any) LoggedConn {
+func NewLoggedConn(parent log.Logger, conn net.Conn, ctx ...any) LoggedConn {
 	c := &logged{
 		Conn: conn,
 		id:   logext.RandId(6),
 	}
-	c.Logger = Log.New(append([]any{"id", c.id}, ctx...)...)
+	c.Logger = parent.New(append([]any{"id", c.id}, ctx...)...)
 	if _, ok := conn.(closeReader); !ok {
 		return c
 	}
