@@ -12,10 +12,8 @@ import (
 func main() {
 	ctx := context.Background()
 	sess, err := libngrok.Connect(ctx, libngrok.
-		ConnectOptions(),
-	// WithAuthToken("1yEmu1I7Nk4SqxKtdQwVbcBGdHk_53NW4yEmNDBnufjb1XDod").
-	// WithServer("tunnel.us.ngrok.com.lan:443").
-	// WithCA("./ca.crt"),
+		ConnectOptions().
+		WithAuthToken(os.Getenv("NGROK_TOKEN")),
 	)
 	if err != nil {
 		fmt.Println(err)
