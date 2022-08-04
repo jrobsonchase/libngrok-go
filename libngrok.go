@@ -308,20 +308,12 @@ func (cfg *CommonConfig) WithProxyProto(version ProxyProtoVersion) *TunnelConfig
 	return cfg.parent
 }
 
-type WebhookProvider string
-
-const (
-	WebhookProviderTwilio = WebhookProvider("twilio")
-	WebhookProviderOkta   = WebhookProvider("okta")
-	WebhookProviderXero   = WebhookProvider("xero")
-)
-
 type WebhookVerification struct {
-	Provider WebhookProvider
+	Provider string
 	Secret   string
 }
 
-func (http *HTTPConfig) WithWebhookVerification(provider WebhookProvider, secret string) *TunnelConfig {
+func (http *HTTPConfig) WithWebhookVerification(provider string, secret string) *TunnelConfig {
 	http.WebhookVerification = &WebhookVerification{
 		Provider: provider,
 		Secret:   secret,
@@ -334,7 +326,7 @@ func (wv *WebhookVerification) toProtoConfig() *pb_agent.MiddlewareConfiguration
 		return nil
 	}
 	return &pb_agent.MiddlewareConfiguration_WebhookVerification{
-		Provider: string(wv.Provider),
+		Provider: wv.Provider,
 		Secret:   wv.Secret,
 	}
 }
