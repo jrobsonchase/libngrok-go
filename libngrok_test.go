@@ -413,6 +413,29 @@ func TestHTTPIPRestriction(t *testing.T) {
 	require.Error(t, <-exited)
 }
 
+func TestTCP(t *testing.T) {
+	ctx := context.Background()
+
+	opts := TCPOptions()
+
+	// Easier to test by pretending it's HTTP on this end.
+	tun, exited := serveHTTP(ctx, t, opts, helloHandler)
+
+	url, err := url.Parse(tun.URL())
+	require.NoError(t, err)
+	url.Scheme = "http"
+	resp, err := http.Get(url.String())
+	require.NoError(t, err, "GET tunnel url")
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "Read response body")
+
+	require.Equal(t, "Hello, world!\n", string(body), "HTTP Body Contents")
+
+	require.NoError(t, tun.Close())
+	require.Error(t, <-exited)
+}
+
 func TestTCPIPRestriction(t *testing.T) {
 	ctx := context.Background()
 
