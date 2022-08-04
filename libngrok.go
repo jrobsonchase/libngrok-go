@@ -120,6 +120,8 @@ type HTTPConfig struct {
 	BasicAuth           *BasicAuth
 	OAuth               *OAuth
 	WebhookVerification *WebhookVerification
+
+	MutualTLSCA []byte
 }
 
 type TCPConfig struct {
@@ -296,6 +298,11 @@ func (http *HTTPConfig) WithBasicAuth(username, password string) *TunnelConfig {
 	return http.parent
 }
 
+func (http *HTTPConfig) WithMutualTLS(caBytes []byte) *TunnelConfig {
+	http.MutualTLSCA = caBytes
+	return http.parent
+}
+
 func (cfg *CommonConfig) WithProxyProto(version ProxyProtoVersion) *TunnelConfig {
 	cfg.ProxyProto = version
 	return cfg.parent
@@ -345,6 +352,12 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	if http.CircuitBreaker != 0 {
 		opts.CircuitBreaker = &pb_agent.MiddlewareConfiguration_CircuitBreaker{
 			ErrorThreshold: http.CircuitBreaker,
+		}
+	}
+
+	if http.MutualTLSCA != nil {
+		opts.MutualTLSCA = &pb_agent.MiddlewareConfiguration_MutualTLS{
+			MutualTLSCA: http.MutualTLSCA,
 		}
 	}
 
