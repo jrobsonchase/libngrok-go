@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	_ "embed"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"strings"
 
@@ -31,7 +30,7 @@ const SchemeHTTPS = Scheme("https")
 type ConnectConfig struct {
 	AuthToken  string
 	ServerAddr string
-	CACert     string
+	CAPool     *x509.CertPool
 
 	Logger log15.Logger
 }
@@ -50,8 +49,8 @@ func (cfg *ConnectConfig) WithServer(addr string) *ConnectConfig {
 	return cfg
 }
 
-func (cfg *ConnectConfig) WithCA(path string) *ConnectConfig {
-	cfg.CACert = path
+func (cfg *ConnectConfig) WithCA(pool *x509.CertPool) *ConnectConfig {
+	cfg.CAPool = pool
 	return cfg
 }
 
@@ -424,28 +423,18 @@ type Session interface {
 }
 
 func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
-	var (
-		caContents []byte
-		err        error
-	)
-	if cfg.CACert != "" {
-		caContents, err = ioutil.ReadFile(cfg.CACert)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read CA certificate: %w", err)
-		}
-	} else {
-		caContents = defaultCACert
+	var err error
+	if cfg.CAPool == nil {
+		cfg.CAPool = x509.NewCertPool()
+		cfg.CAPool.AppendCertsFromPEM(defaultCACert)
 	}
-
-	pool := x509.NewCertPool()
-	pool.AppendCertsFromPEM(caContents)
 
 	if cfg.ServerAddr == "" {
 		cfg.ServerAddr = defaultServer
 	}
 
 	tlsConfig := &tls.Config{
-		RootCAs:    pool,
+		RootCAs:    cfg.CAPool,
 		ServerName: strings.Split(cfg.ServerAddr, ":")[0],
 		MinVersion: tls.VersionTLS12,
 	}
