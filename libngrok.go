@@ -528,6 +528,8 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg *TunnelConfig) (Tunne
 type Tunnel interface {
 	net.Listener
 
+	CloseWithContext(context.Context) error
+
 	// Not available for labeled tunnels
 	URL() string
 	Proto() string
@@ -554,6 +556,10 @@ func (t *tunnelImpl) Accept() (net.Conn, error) {
 }
 
 func (t *tunnelImpl) Close() error {
+	return t.Tunnel.Close()
+}
+
+func (t *tunnelImpl) CloseWithContext(_ context.Context) error {
 	return t.Tunnel.Close()
 }
 
