@@ -41,8 +41,10 @@ func serveHTTP(ctx context.Context, t *testing.T, opts ToTunnelConfig, handler h
 	tun := startTunnel(ctx, t, sess, opts)
 	exited := make(chan error)
 
+	httpTun := tun.AsHTTP()
+
 	go func() {
-		exited <- http.Serve(tun, handler)
+		exited <- httpTun.Serve(handler)
 	}()
 	return tun, exited
 }
@@ -51,7 +53,7 @@ func TestTunnel(t *testing.T) {
 	ctx := context.Background()
 	sess := setupSession(ctx, t)
 
-	tun := startTunnel(ctx, t, sess, HTTPOptions())
+	tun := startTunnel(ctx, t, sess, HTTPOptions()).AsTCP()
 
 	require.NotEmpty(t, tun.URL(), "Tunnel URL")
 }
@@ -74,7 +76,7 @@ func TestHTTPS(t *testing.T) {
 	require.NotNil(t, resp.TLS, "TLS established")
 
 	// Closing the tunnel should be fine
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 
 	// The http server should exit with a "closed" error
 	require.Error(t, <-exited)
@@ -99,7 +101,7 @@ func TestHTTP(t *testing.T) {
 	require.Nil(t, resp.TLS, "No TLS")
 
 	// Closing the tunnel should be fine
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 
 	// The http server should exit with a "closed" error
 	require.Error(t, <-exited)
@@ -127,7 +129,7 @@ func TestHTTPCompression(t *testing.T) {
 
 	require.Equal(t, "Hello, world!\n", string(body), "HTTP Body Contents")
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -186,7 +188,7 @@ func TestHTTPHeaders(t *testing.T) {
 	require.Contains(t, resp.Header, "Spam", "Spam added")
 	require.Equal(t, "eggs", resp.Header.Get("Spam"), "Spam=eggs")
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -217,7 +219,7 @@ func TestBasicAuth(t *testing.T) {
 
 	require.Equal(t, "Hello, world!\n", string(body), "HTTP Body Contents")
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -252,7 +254,7 @@ func TestCircuitBreaker(t *testing.T) {
 
 	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -325,7 +327,7 @@ func TestProxyProto(t *testing.T) {
 			sess := setupSession(ctx, t)
 			tun := startTunnel(ctx, t, sess, tcase.optsFunc().
 				WithProxyProtoI(tcase.version),
-			)
+			).AsTCP()
 
 			go tcase.reqFunc(t, tun.URL())
 
@@ -359,7 +361,7 @@ func TestHostname(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Hello, world!\n", string(content))
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -385,7 +387,7 @@ func TestSubdomain(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Hello, world!\n", string(content))
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -403,7 +405,7 @@ func TestOAuth(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(content), "Hello, world!")
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -426,7 +428,7 @@ func TestHTTPIPRestriction(t *testing.T) {
 
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -449,7 +451,7 @@ func TestTCP(t *testing.T) {
 
 	require.Equal(t, "Hello, world!\n", string(body), "HTTP Body Contents")
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
@@ -476,12 +478,11 @@ func TestTCPIPRestriction(t *testing.T) {
 	// Rather than layer-7 error, we should see it at the connection level
 	require.Error(t, err, "GET Tunnel URL")
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
 
 func TestLabeled(t *testing.T) {
-
 	ctx := context.Background()
 	tun, exited := serveHTTP(ctx, t,
 		LabeledOptions().WithLabel("edge", "edghts_2CtuOWQFCrvggKT34fRCFXs0AiK"),
@@ -505,6 +506,6 @@ func TestLabeled(t *testing.T) {
 
 	cancel()
 
-	require.NoError(t, tun.Close())
+	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }

@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 
 	"github.com/inconshreveable/log15"
@@ -171,18 +172,26 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunn
 }
 
 type Tunnel interface {
-	net.Listener
-
 	CloseWithContext(context.Context) error
 
-	// Not available for labeled tunnels
-	URL() string
 	Proto() string
+	URL() string
 
-	// Metadata() string
-	// Labels() map[string]string
+	Labels() map[string]string
+	Metadata() string
 
-	// ID() string
+	AsTCP() TCPTunnel
+	AsHTTP() HTTPTunnel
+}
+
+type TCPTunnel interface {
+	Tunnel
+	net.Listener
+}
+
+type HTTPTunnel interface {
+	Tunnel
+	Serve(http.Handler) error
 }
 
 type tunnelImpl struct {
@@ -218,6 +227,26 @@ func (t *tunnelImpl) URL() string {
 
 func (t *tunnelImpl) Proto() string {
 	return t.Tunnel.RemoteBindConfig().ConfigProto
+}
+
+func (t *tunnelImpl) Metadata() string {
+	return t.Tunnel.RemoteBindConfig().Metadata
+}
+
+func (t *tunnelImpl) Labels() map[string]string {
+	return t.Tunnel.RemoteBindConfig().Labels
+}
+
+func (t *tunnelImpl) AsHTTP() HTTPTunnel {
+	return t
+}
+
+func (t *tunnelImpl) AsTCP() TCPTunnel {
+	return t
+}
+
+func (t *tunnelImpl) Serve(h http.Handler) error {
+	return http.Serve(t, h)
 }
 
 type Conn interface {
