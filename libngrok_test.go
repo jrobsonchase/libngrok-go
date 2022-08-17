@@ -150,11 +150,11 @@ func TestHTTPHeaders(t *testing.T) {
 	ctx := context.Background()
 	opts := HTTPOptions().
 		WithRequestHeaders(HTTPHeaders().
-			AddHeader("foo", "bar").
-			RemoveHeader("baz")).
+			Add("foo", "bar").
+			Remove("baz")).
 		WithResponseHeaders(HTTPHeaders().
-			AddHeader("spam", "eggs").
-			RemoveHeader("python"))
+			Add("spam", "eggs").
+			Remove("python"))
 
 	tun, exited := serveHTTP(ctx, t, opts, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		defer func() { _ = recover() }()

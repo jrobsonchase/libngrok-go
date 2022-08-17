@@ -61,17 +61,17 @@ func (cfg *ConnectConfig) WithLogger(logger log15.Logger) *ConnectConfig {
 }
 
 type Headers struct {
-	Add    map[string]string
-	Remove []string
+	Added   map[string]string
+	Removed []string
 }
 
-func (h *Headers) AddHeader(name, value string) *Headers {
-	h.Add[name] = value
+func (h *Headers) Add(name, value string) *Headers {
+	h.Added[name] = value
 	return h
 }
 
-func (h *Headers) RemoveHeader(name string) *Headers {
-	h.Remove = append(h.Remove, name)
+func (h *Headers) Remove(name string) *Headers {
+	h.Removed = append(h.Removed, name)
 	return h
 }
 
@@ -81,10 +81,10 @@ func (h *Headers) toProtoConfig() *pb_agent.MiddlewareConfiguration_Headers {
 	}
 
 	headers := &pb_agent.MiddlewareConfiguration_Headers{
-		Remove: h.Remove,
+		Remove: h.Removed,
 	}
 
-	for k, v := range h.Add {
+	for k, v := range h.Added {
 		headers.Add = append(headers.Add, fmt.Sprintf("%s:%s", k, v))
 	}
 
@@ -93,8 +93,8 @@ func (h *Headers) toProtoConfig() *pb_agent.MiddlewareConfiguration_Headers {
 
 func HTTPHeaders() *Headers {
 	return &Headers{
-		Add:    map[string]string{},
-		Remove: []string{},
+		Added:   map[string]string{},
+		Removed: []string{},
 	}
 }
 
