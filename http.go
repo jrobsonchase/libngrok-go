@@ -18,7 +18,8 @@ func HTTPHeaders() *Headers {
 }
 
 type HTTPConfig struct {
-	*CommonConfig[HTTPConfig]
+	CommonConfig[HTTPConfig]
+	TLSCommon[HTTPConfig]
 
 	Scheme         Scheme
 	Compression    bool
@@ -36,11 +37,12 @@ func HTTPOptions() *HTTPConfig {
 	opts := &HTTPConfig{
 		Scheme: SchemeHTTPS,
 	}
-
-	opts.CommonConfig = &CommonConfig[HTTPConfig]{
+	opts.TLSCommon = TLSCommon[HTTPConfig]{
 		parent: opts,
 	}
-
+	opts.CommonConfig = CommonConfig[HTTPConfig]{
+		parent: opts,
+	}
 	return opts
 }
 
@@ -162,8 +164,7 @@ func (wv *WebhookVerification) toProtoConfig() *pb_agent.MiddlewareConfiguration
 
 func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	opts := &proto.HTTPOptions{
-		Hostname:  http.Hostname,
-		Subdomain: http.Subdomain,
+		Hostname: http.Domain,
 	}
 
 	if http.Compression {
@@ -177,9 +178,7 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	}
 
 	if http.MutualTLSCA != nil {
-		opts.MutualTLSCA = &pb_agent.MiddlewareConfiguration_MutualTLS{
-			MutualTLSCA: http.MutualTLSCA,
-		}
+		opts.MutualTLSCA = http.TLSCommon.toProtoConfig()
 	}
 
 	opts.ProxyProto = proto.ProxyProto(http.ProxyProto)

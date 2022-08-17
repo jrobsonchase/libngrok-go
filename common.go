@@ -1,36 +1,16 @@
 package libngrok
 
 import (
-	"crypto/x509"
-	"encoding/pem"
 	"net"
 
 	"github.com/ngrok/libngrok-go/internal/pb_agent"
 )
 
 type CommonConfig[T any] struct {
-	Subdomain        string
-	Hostname         string
-	parent           *T
+	parent *T
+
 	CIDRRestrictions *CIDRRestriction
 	ProxyProto       ProxyProtoVersion
-
-	MutualTLSCA []byte
-}
-
-func (cfg *CommonConfig[T]) WithDomain(name string) *T {
-	cfg.Hostname = name
-	return cfg.parent
-}
-
-func (cfg *CommonConfig[T]) WithMutualTLSCA(certs []*x509.Certificate) *T {
-	for _, cert := range certs {
-		cfg.MutualTLSCA = append(cfg.MutualTLSCA, pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Raw,
-		})...)
-	}
-	return cfg.parent
 }
 
 type ProxyProtoVersion int32

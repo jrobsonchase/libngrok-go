@@ -3,13 +3,13 @@ package libngrok
 import "github.com/ngrok/libngrok-go/internal/tunnel/proto"
 
 type TCPConfig struct {
-	*CommonConfig[TCPConfig]
+	CommonConfig[TCPConfig]
 	RemoteAddr string
 }
 
 func TCPOptions() *TCPConfig {
 	opts := &TCPConfig{}
-	opts.CommonConfig = &CommonConfig[TCPConfig]{
+	opts.CommonConfig = CommonConfig[TCPConfig]{
 		parent: opts,
 	}
 	return opts
