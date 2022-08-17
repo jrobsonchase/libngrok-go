@@ -397,10 +397,13 @@ func TestOAuth(t *testing.T) {
 func TestHTTPIPRestriction(t *testing.T) {
 	ctx := context.Background()
 
-	opts := HTTPOptions().WithIPRestriction(
-		IPRestrictionSet().
-			AllowCIDR("127.0.0.1/32").
-			DenyCIDR("0.0.0.0/0"),
+	_, cidr, err := net.ParseCIDR("0.0.0.0/0")
+	require.NoError(t, err)
+
+	opts := HTTPOptions().WithCIDRRestriction(
+		CIDRSet().
+			AllowString("127.0.0.1/32").
+			Deny(cidr),
 	)
 
 	tun, exited := serveHTTP(ctx, t, opts, helloHandler)
@@ -440,10 +443,13 @@ func TestTCP(t *testing.T) {
 func TestTCPIPRestriction(t *testing.T) {
 	ctx := context.Background()
 
-	opts := TCPOptions().WithIPRestriction(
-		IPRestrictionSet().
-			AllowCIDR("127.0.0.1/32").
-			DenyCIDR("0.0.0.0/0"),
+	_, cidr, err := net.ParseCIDR("0.0.0.0/0")
+	require.NoError(t, err)
+
+	opts := TCPOptions().WithCIDRRestriction(
+		CIDRSet().
+			AllowString("127.0.0.1/32").
+			Deny(cidr),
 	)
 
 	// Easier to test by pretending it's HTTP on this end.

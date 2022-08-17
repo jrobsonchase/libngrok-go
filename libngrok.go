@@ -132,42 +132,56 @@ type LabeledConfig struct {
 	Labels map[string]string
 }
 
-type IPRestriction struct {
-	AllowCIDRs []string
-	DenyCIDRs  []string
+type CIDRRestriction struct {
+	Allowed []string
+	Denied  []string
 }
 
-func IPRestrictionSet() *IPRestriction {
-	return &IPRestriction{}
+func CIDRSet() *CIDRRestriction {
+	return &CIDRRestriction{}
 }
 
-func (ir *IPRestriction) AllowCIDR(cidr ...string) *IPRestriction {
-	ir.AllowCIDRs = append(ir.AllowCIDRs, cidr...)
-	return ir
+func (cr *CIDRRestriction) AllowString(cidr ...string) *CIDRRestriction {
+	cr.Allowed = append(cr.Allowed, cidr...)
+	return cr
 }
 
-func (ir *IPRestriction) DenyCIDR(cidr ...string) *IPRestriction {
-	ir.DenyCIDRs = append(ir.DenyCIDRs, cidr...)
-	return ir
+func (cr *CIDRRestriction) Allow(net ...*net.IPNet) *CIDRRestriction {
+	for _, n := range net {
+		cr.AllowString(n.String())
+	}
+	return cr
 }
 
-func (ir *IPRestriction) toProtoConfig() *pb_agent.MiddlewareConfiguration_IPRestriction {
+func (cr *CIDRRestriction) DenyString(cidr ...string) *CIDRRestriction {
+	cr.Denied = append(cr.Denied, cidr...)
+	return cr
+}
+
+func (cr *CIDRRestriction) Deny(net ...*net.IPNet) *CIDRRestriction {
+	for _, n := range net {
+		cr.DenyString(n.String())
+	}
+	return cr
+}
+
+func (ir *CIDRRestriction) toProtoConfig() *pb_agent.MiddlewareConfiguration_IPRestriction {
 	if ir == nil {
 		return nil
 	}
 
 	return &pb_agent.MiddlewareConfiguration_IPRestriction{
-		AllowCIDRs: ir.AllowCIDRs,
-		DenyCIDRs:  ir.DenyCIDRs,
+		AllowCIDRs: ir.Allowed,
+		DenyCIDRs:  ir.Denied,
 	}
 }
 
 type CommonConfig struct {
-	Subdomain      string
-	Hostname       string
-	parent         *TunnelConfig
-	IPRestrictions *IPRestriction
-	ProxyProto     ProxyProtoVersion
+	Subdomain        string
+	Hostname         string
+	parent           *TunnelConfig
+	CIDRRestrictions *CIDRRestriction
+	ProxyProto       ProxyProtoVersion
 
 	MutualTLSCA []byte
 }
@@ -385,7 +399,7 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	}
 	opts.OAuth = http.OAuth.toProtoConfig()
 	opts.WebhookVerification = http.WebhookVerification.toProtoConfig()
-	opts.IPRestriction = http.parent.IPRestrictions.toProtoConfig()
+	opts.IPRestriction = http.parent.CIDRRestrictions.toProtoConfig()
 
 	return opts
 }
@@ -411,17 +425,17 @@ func (tcp *TCPConfig) WithRemoteAddr(addr string) *TunnelConfig {
 func (tcp *TCPConfig) toProtoConfig() *proto.TCPOptions {
 	return &proto.TCPOptions{
 		Addr:          tcp.RemoteAddr,
-		IPRestriction: tcp.parent.IPRestrictions.toProtoConfig(),
+		IPRestriction: tcp.parent.CIDRRestrictions.toProtoConfig(),
 		ProxyProto:    proto.ProxyProto(tcp.parent.ProxyProto),
 	}
 }
 
-func (cfg *CommonConfig) WithIPRestriction(set *IPRestriction) *TunnelConfig {
-	if cfg.IPRestrictions != nil && set != nil {
-		cfg.IPRestrictions.AllowCIDR(set.AllowCIDRs...)
-		cfg.IPRestrictions.DenyCIDR(set.DenyCIDRs...)
+func (cfg *CommonConfig) WithCIDRRestriction(set *CIDRRestriction) *TunnelConfig {
+	if cfg.CIDRRestrictions != nil && set != nil {
+		cfg.CIDRRestrictions.AllowString(set.Allowed...)
+		cfg.CIDRRestrictions.DenyString(set.Denied...)
 	} else {
-		cfg.IPRestrictions = set
+		cfg.CIDRRestrictions = set
 	}
 	return cfg.parent
 }
