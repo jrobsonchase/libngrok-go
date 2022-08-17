@@ -12,6 +12,7 @@ type CommonConfig[T any] struct {
 	CIDRRestrictions *CIDRRestriction
 	ProxyProto       ProxyProtoVersion
 	Metadata         string
+	ForwardsTo       string
 }
 
 type ProxyProtoVersion int32
@@ -28,6 +29,11 @@ func (cfg *CommonConfig[T]) WithProxyProto(version ProxyProtoVersion) *T {
 
 func (cfg *CommonConfig[T]) WithMetadata(meta string) *T {
 	cfg.Metadata = meta
+	return cfg.parent
+}
+
+func (cfg *CommonConfig[T]) WithForwardsTo(address string) *T {
+	cfg.ForwardsTo = address
 	return cfg.parent
 }
 

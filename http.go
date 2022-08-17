@@ -234,8 +234,9 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 
 func (cfg *HTTPConfig) ToTunnelConfig() TunnelConfig {
 	return TunnelConfig{
-		proto: string(cfg.Scheme),
-		opts:  cfg.toProtoConfig(),
+		forwardsTo: cfg.ForwardsTo,
+		proto:      string(cfg.Scheme),
+		opts:       cfg.toProtoConfig(),
 		extra: proto.BindExtra{
 			Metadata: cfg.Metadata,
 		},

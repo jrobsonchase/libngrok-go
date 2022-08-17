@@ -30,8 +30,9 @@ func (tcp *TCPConfig) toProtoConfig() *proto.TCPOptions {
 
 func (tcp *TCPConfig) ToTunnelConfig() TunnelConfig {
 	return TunnelConfig{
-		proto: "tcp",
-		opts:  tcp.toProtoConfig(),
+		forwardsTo: tcp.ForwardsTo,
+		proto:      "tcp",
+		opts:       tcp.toProtoConfig(),
 		extra: proto.BindExtra{
 			Metadata: tcp.Metadata,
 		},

@@ -194,9 +194,9 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunn
 	tunnelCfg := cfg.ToTunnelConfig()
 
 	if tunnelCfg.proto != "" {
-		tunnel, err = s.TunnelSession.Listen(tunnelCfg.proto, tunnelCfg.opts, tunnelCfg.extra, "application")
+		tunnel, err = s.TunnelSession.Listen(tunnelCfg.proto, tunnelCfg.opts, tunnelCfg.extra, tunnelCfg.forwardsTo)
 	} else {
-		tunnel, err = s.TunnelSession.ListenLabel(tunnelCfg.labels, tunnelCfg.extra.Metadata, "application")
+		tunnel, err = s.TunnelSession.ListenLabel(tunnelCfg.labels, tunnelCfg.extra.Metadata, tunnelCfg.forwardsTo)
 	}
 
 	if err != nil {
