@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	_ "embed"
-	"encoding/pem"
 	"fmt"
 	"net"
 	"strings"
@@ -22,11 +21,6 @@ import (
 var defaultCACert []byte
 
 const defaultServer = "tunnel.ngrok.com:443"
-
-type Scheme string
-
-const SchemeHTTP = Scheme("http")
-const SchemeHTTPS = Scheme("https")
 
 type ConnectConfig struct {
 	AuthToken  string
@@ -91,359 +85,10 @@ func (h *Headers) toProtoConfig() *pb_agent.MiddlewareConfiguration_Headers {
 	return headers
 }
 
-func HTTPHeaders() *Headers {
-	return &Headers{
-		Added:   map[string]string{},
-		Removed: []string{},
-	}
-}
-
-type ProxyProtoVersion int32
-
-const (
-	ProxyProtoV1 = ProxyProtoVersion(1)
-	ProxyProtoV2 = ProxyProtoVersion(2)
-)
-
-type HTTPConfig struct {
-	parent *TunnelConfig
-
-	Scheme         Scheme
-	Compression    bool
-	CircuitBreaker float64
-
-	RequestHeaders  *Headers
-	ResponseHeaders *Headers
-
-	BasicAuth           []*BasicAuth
-	OAuth               *OAuth
-	WebhookVerification *WebhookVerification
-}
-
-type TCPConfig struct {
-	parent     *TunnelConfig
-	RemoteAddr string
-}
-
-type TLSConfig struct{}
-
-type LabeledConfig struct {
-	parent *TunnelConfig
-	Labels map[string]string
-}
-
-type CIDRRestriction struct {
-	Allowed []string
-	Denied  []string
-}
-
-func CIDRSet() *CIDRRestriction {
-	return &CIDRRestriction{}
-}
-
-func (cr *CIDRRestriction) AllowString(cidr ...string) *CIDRRestriction {
-	cr.Allowed = append(cr.Allowed, cidr...)
-	return cr
-}
-
-func (cr *CIDRRestriction) Allow(net ...*net.IPNet) *CIDRRestriction {
-	for _, n := range net {
-		cr.AllowString(n.String())
-	}
-	return cr
-}
-
-func (cr *CIDRRestriction) DenyString(cidr ...string) *CIDRRestriction {
-	cr.Denied = append(cr.Denied, cidr...)
-	return cr
-}
-
-func (cr *CIDRRestriction) Deny(net ...*net.IPNet) *CIDRRestriction {
-	for _, n := range net {
-		cr.DenyString(n.String())
-	}
-	return cr
-}
-
-func (ir *CIDRRestriction) toProtoConfig() *pb_agent.MiddlewareConfiguration_IPRestriction {
-	if ir == nil {
-		return nil
-	}
-
-	return &pb_agent.MiddlewareConfiguration_IPRestriction{
-		AllowCIDRs: ir.Allowed,
-		DenyCIDRs:  ir.Denied,
-	}
-}
-
-type CommonConfig struct {
-	Subdomain        string
-	Hostname         string
-	parent           *TunnelConfig
-	CIDRRestrictions *CIDRRestriction
-	ProxyProto       ProxyProtoVersion
-
-	MutualTLSCA []byte
-}
-
-type TunnelConfig struct {
-	*CommonConfig
-	*HTTPConfig
-	*TCPConfig
-	*LabeledConfig
-	*TLSConfig
-}
-
-func newTunnelConfig() *TunnelConfig {
-	opts := &TunnelConfig{
-		CommonConfig: &CommonConfig{},
-	}
-	opts.CommonConfig.parent = opts
-	return opts
-}
-
-func TCPOptions() *TunnelConfig {
-	opts := newTunnelConfig()
-	opts.TCPConfig = &TCPConfig{parent: opts}
-	return opts
-}
-
-func HTTPOptions() *TunnelConfig {
-	opts := newTunnelConfig()
-	opts.HTTPConfig = &HTTPConfig{parent: opts}
-	return opts
-}
-
-func LabeledOptions() *TunnelConfig {
-	opts := newTunnelConfig()
-	opts.LabeledConfig = &LabeledConfig{
-		Labels: map[string]string{},
-		parent: opts,
-	}
-	return opts
-}
-
-func TLSOptions() *TunnelConfig {
-	opts := newTunnelConfig()
-	opts.TLSConfig = &TLSConfig{}
-	return opts
-}
-
-func (http *HTTPConfig) WithScheme(scheme Scheme) *TunnelConfig {
-	http.Scheme = scheme
-	return http.parent
-}
-
-func (cfg *CommonConfig) WithDomain(name string) *TunnelConfig {
-	cfg.Hostname = name
-	return cfg.parent
-}
-
-func (http *HTTPConfig) WithCompression() *TunnelConfig {
-	http.Compression = true
-	return http.parent
-}
-
-func (http *HTTPConfig) WithCircuitBreaker(ratio float64) *TunnelConfig {
-	http.CircuitBreaker = ratio
-	return http.parent
-}
-
-func (http *HTTPConfig) WithRequestHeaders(headers *Headers) *TunnelConfig {
-	http.RequestHeaders = headers
-	return http.parent
-}
-
-func (http *HTTPConfig) WithResponseHeaders(headers *Headers) *TunnelConfig {
-	http.ResponseHeaders = headers
-	return http.parent
-}
-
-type BasicAuth struct {
-	Username, Password string
-}
-
-func (ba *BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuthCredential {
-	if ba == nil {
-		return nil
-	}
-	return &pb_agent.MiddlewareConfiguration_BasicAuthCredential{
-		CleartextPassword: ba.Password,
-		Username:          ba.Username,
-	}
-}
-
-type OAuth struct {
-	Provider     string
-	AllowEmails  []string
-	AllowDomains []string
-	Scopes       []string
-}
-
-func OAuthProvider(name string) *OAuth {
-	return &OAuth{
-		Provider: name,
-	}
-}
-
-func (p *OAuth) AllowEmail(addr string) *OAuth {
-	p.AllowEmails = append(p.AllowEmails, addr)
-	return p
-}
-
-func (p *OAuth) AllowDomain(domain string) *OAuth {
-	p.AllowDomains = append(p.AllowDomains, domain)
-	return p
-}
-
-func (p *OAuth) WithScope(scope string) *OAuth {
-	p.Scopes = append(p.Scopes, scope)
-	return p
-}
-
-func (http *HTTPConfig) WithOAuth(cfg *OAuth) *TunnelConfig {
-	http.OAuth = cfg
-	return http.parent
-}
-
-func (oauth *OAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_OAuth {
-	if oauth == nil {
-		return nil
-	}
-
-	return &pb_agent.MiddlewareConfiguration_OAuth{
-		Provider:     string(oauth.Provider),
-		AllowEmails:  oauth.AllowEmails,
-		AllowDomains: oauth.AllowDomains,
-		Scopes:       oauth.Scopes,
-	}
-}
-
-func (http *HTTPConfig) WithBasicAuth(username, password string) *TunnelConfig {
-	http.BasicAuth = append(http.BasicAuth, &BasicAuth{
-		Username: username,
-		Password: password,
-	})
-	return http.parent
-}
-
-func (cfg *CommonConfig) WithMutualTLSCA(certs []*x509.Certificate) *TunnelConfig {
-	for _, cert := range certs {
-		cfg.MutualTLSCA = append(cfg.MutualTLSCA, pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert.Raw,
-		})...)
-	}
-	return cfg.parent
-}
-
-func (cfg *CommonConfig) WithProxyProto(version ProxyProtoVersion) *TunnelConfig {
-	cfg.ProxyProto = version
-	return cfg.parent
-}
-
-type WebhookVerification struct {
-	Provider string
-	Secret   string
-}
-
-func (http *HTTPConfig) WithWebhookVerification(provider string, secret string) *TunnelConfig {
-	http.WebhookVerification = &WebhookVerification{
-		Provider: provider,
-		Secret:   secret,
-	}
-	return http.parent
-}
-
-func (wv *WebhookVerification) toProtoConfig() *pb_agent.MiddlewareConfiguration_WebhookVerification {
-	if wv == nil {
-		return nil
-	}
-	return &pb_agent.MiddlewareConfiguration_WebhookVerification{
-		Provider: wv.Provider,
-		Secret:   wv.Secret,
-	}
-}
-
-func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
-	opts := &proto.HTTPOptions{
-		Hostname:  http.parent.Hostname,
-		Subdomain: http.parent.Subdomain,
-	}
-
-	if http.Compression {
-		opts.Compression = &pb_agent.MiddlewareConfiguration_Compression{}
-	}
-
-	if http.CircuitBreaker != 0 {
-		opts.CircuitBreaker = &pb_agent.MiddlewareConfiguration_CircuitBreaker{
-			ErrorThreshold: http.CircuitBreaker,
-		}
-	}
-
-	if http.parent.MutualTLSCA != nil {
-		opts.MutualTLSCA = &pb_agent.MiddlewareConfiguration_MutualTLS{
-			MutualTLSCA: http.parent.MutualTLSCA,
-		}
-	}
-
-	opts.ProxyProto = proto.ProxyProto(http.parent.ProxyProto)
-
-	opts.RequestHeaders = http.RequestHeaders.toProtoConfig()
-	opts.ResponseHeaders = http.ResponseHeaders.toProtoConfig()
-	if len(http.BasicAuth) > 0 {
-		opts.BasicAuth = &pb_agent.MiddlewareConfiguration_BasicAuth{}
-		for _, c := range http.BasicAuth {
-			opts.BasicAuth.Credentials = append(opts.BasicAuth.Credentials, c.toProtoConfig())
-		}
-	}
-	opts.OAuth = http.OAuth.toProtoConfig()
-	opts.WebhookVerification = http.WebhookVerification.toProtoConfig()
-	opts.IPRestriction = http.parent.CIDRRestrictions.toProtoConfig()
-
-	return opts
-}
-
-func (lo *LabeledConfig) WithLabel(key, value string) *TunnelConfig {
-	lo.Labels[key] = value
-	return lo.parent
-}
-
-func (lo *LabeledConfig) toProtoConfig() *proto.LabelOptions {
-	opts := &proto.LabelOptions{
-		Labels: lo.Labels,
-	}
-
-	return opts
-}
-
-func (tcp *TCPConfig) WithRemoteAddr(addr string) *TunnelConfig {
-	tcp.RemoteAddr = addr
-	return tcp.parent
-}
-
-func (tcp *TCPConfig) toProtoConfig() *proto.TCPOptions {
-	return &proto.TCPOptions{
-		Addr:          tcp.RemoteAddr,
-		IPRestriction: tcp.parent.CIDRRestrictions.toProtoConfig(),
-		ProxyProto:    proto.ProxyProto(tcp.parent.ProxyProto),
-	}
-}
-
-func (cfg *CommonConfig) WithCIDRRestriction(set *CIDRRestriction) *TunnelConfig {
-	if cfg.CIDRRestrictions != nil && set != nil {
-		cfg.CIDRRestrictions.AllowString(set.Allowed...)
-		cfg.CIDRRestrictions.DenyString(set.Denied...)
-	} else {
-		cfg.CIDRRestrictions = set
-	}
-	return cfg.parent
-}
-
 type Session interface {
 	Close() error
 
-	StartTunnel(ctx context.Context, cfg *TunnelConfig) (Tunnel, error)
+	StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunnel, error)
 }
 
 func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
@@ -502,44 +147,20 @@ func (s *sessionImpl) Close() error {
 	return s.TunnelSession.Close()
 }
 
-func (s *sessionImpl) StartTunnel(ctx context.Context, cfg *TunnelConfig) (Tunnel, error) {
-	var listen func() (tunnel_client.Tunnel, error)
+func (s *sessionImpl) StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunnel, error) {
+	var (
+		tunnel tunnel_client.Tunnel
+		err    error
+	)
 
-	if cfg.HTTPConfig != nil {
-		opts := cfg.HTTPConfig.toProtoConfig()
-		listen = func() (tunnel_client.Tunnel, error) {
-			switch cfg.Scheme {
-			case "", SchemeHTTPS:
-				return s.TunnelSession.ListenHTTPS(opts, proto.BindExtra{}, "application")
-			case SchemeHTTP:
-				return s.TunnelSession.ListenHTTP(opts, proto.BindExtra{}, "application")
-			default:
-				return nil, fmt.Errorf("invalid scheme for HTTP tunnel: %s", cfg.Scheme)
-			}
-		}
+	tunnelCfg := cfg.ToTunnelConfig()
+
+	if tunnelCfg.proto != "" {
+		tunnel, err = s.TunnelSession.Listen(tunnelCfg.proto, tunnelCfg.opts, tunnelCfg.extra, "application")
+	} else {
+		tunnel, err = s.TunnelSession.ListenLabel(tunnelCfg.labels, tunnelCfg.metadata, "application")
 	}
 
-	if cfg.TCPConfig != nil {
-		if listen != nil {
-			return nil, fmt.Errorf("multiple tunnel configs provided")
-		}
-		opts := cfg.TCPConfig.toProtoConfig()
-		listen = func() (tunnel_client.Tunnel, error) {
-			return s.TunnelSession.ListenTCP(opts, proto.BindExtra{}, "application")
-		}
-	}
-
-	if cfg.LabeledConfig != nil {
-		if listen != nil {
-			return nil, fmt.Errorf("multiple tunnel configs provided")
-		}
-		opts := cfg.LabeledConfig.toProtoConfig()
-		listen = func() (tunnel_client.Tunnel, error) {
-			return s.TunnelSession.ListenLabel(opts.Labels, "", "application")
-		}
-	}
-
-	tunnel, err := listen()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start tunnel: %w", err)
 	}

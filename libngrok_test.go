@@ -25,7 +25,7 @@ func setupSession(ctx context.Context, t *testing.T) Session {
 	return sess
 }
 
-func startTunnel(ctx context.Context, t *testing.T, sess Session, opts *TunnelConfig) Tunnel {
+func startTunnel(ctx context.Context, t *testing.T, sess Session, opts ToTunnelConfig) Tunnel {
 	tun, err := sess.StartTunnel(ctx, opts)
 	require.NoError(t, err, "StartTunnel")
 	return tun
@@ -35,7 +35,7 @@ var helloHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request
 	_, _ = fmt.Fprintln(rw, "Hello, world!")
 })
 
-func serveHTTP(ctx context.Context, t *testing.T, opts *TunnelConfig, handler http.Handler) (Tunnel, <-chan error) {
+func serveHTTP(ctx context.Context, t *testing.T, opts ToTunnelConfig, handler http.Handler) (Tunnel, <-chan error) {
 	sess := setupSession(ctx, t)
 
 	tun := startTunnel(ctx, t, sess, opts)
@@ -256,12 +256,25 @@ func TestCircuitBreaker(t *testing.T) {
 	require.Error(t, <-exited)
 }
 
+type TestConfig interface {
+	ToTunnelConfig
+	WithProxyProtoI(version ProxyProtoVersion) ToTunnelConfig
+}
+
+func (http *HTTPConfig) WithProxyProtoI(version ProxyProtoVersion) ToTunnelConfig {
+	return http.WithProxyProto(version)
+}
+
+func (tcp *TCPConfig) WithProxyProtoI(version ProxyProtoVersion) ToTunnelConfig {
+	return tcp.WithProxyProto(version)
+}
+
 func TestProxyProto(t *testing.T) {
 	ctx := context.Background()
 
 	type testCase struct {
 		name          string
-		optsFunc      func() *TunnelConfig
+		optsFunc      func() TestConfig
 		reqFunc       func(*testing.T, string)
 		version       ProxyProtoVersion
 		shouldContain string
@@ -284,7 +297,7 @@ func TestProxyProto(t *testing.T) {
 		cases = append(cases,
 			testCase{
 				name:     fmt.Sprintf("HTTP/Version%d", c.version),
-				optsFunc: HTTPOptions,
+				optsFunc: func() TestConfig { return HTTPOptions() },
 				reqFunc: func(t *testing.T, url string) {
 					_, _ = http.Get(url)
 				},
@@ -293,7 +306,7 @@ func TestProxyProto(t *testing.T) {
 			},
 			testCase{
 				name:     fmt.Sprintf("TCP/Version%d", c.version),
-				optsFunc: TCPOptions,
+				optsFunc: func() TestConfig { return TCPOptions() },
 				reqFunc: func(t *testing.T, u string) {
 					url, err := url.Parse(u)
 					require.NoError(t, err)
@@ -311,7 +324,7 @@ func TestProxyProto(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			sess := setupSession(ctx, t)
 			tun := startTunnel(ctx, t, sess, tcase.optsFunc().
-				WithProxyProto(tcase.version),
+				WithProxyProtoI(tcase.version),
 			)
 
 			go tcase.reqFunc(t, tun.URL())
