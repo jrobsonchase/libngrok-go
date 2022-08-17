@@ -379,7 +379,7 @@ func TestSubdomain(t *testing.T) {
 func TestOAuth(t *testing.T) {
 	ctx := context.Background()
 
-	opts := HTTPOptions().WithOAuth(OAuthGoogle, nil, nil, nil)
+	opts := HTTPOptions().WithOAuth(OAuthProvider("google"))
 
 	tun, exited := serveHTTP(ctx, t, opts, helloHandler)
 

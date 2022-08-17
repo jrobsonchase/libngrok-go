@@ -259,29 +259,35 @@ func (ba *BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuth
 }
 
 type OAuth struct {
-	Provider     OAuthProvider
+	Provider     string
 	AllowEmails  []string
 	AllowDomains []string
 	Scopes       []string
 }
 
-type OAuthProvider string
-
-const (
-	OAuthGoogle    = OAuthProvider("google")
-	OAuthFacebook  = OAuthProvider("facebook")
-	OAuthGitHub    = OAuthProvider("github")
-	OAuthMicrosoft = OAuthProvider("microsoft")
-)
-
-func (http *HTTPConfig) WithOAuth(provider OAuthProvider, allowEmails, allowDomains, scopes []string) *TunnelConfig {
-	http.OAuth = &OAuth{
-		Provider:     provider,
-		AllowEmails:  allowEmails,
-		AllowDomains: allowDomains,
-		Scopes:       scopes,
+func OAuthProvider(name string) *OAuth {
+	return &OAuth{
+		Provider: name,
 	}
+}
 
+func (p *OAuth) AllowEmail(addr string) *OAuth {
+	p.AllowEmails = append(p.AllowEmails, addr)
+	return p
+}
+
+func (p *OAuth) AllowDomain(domain string) *OAuth {
+	p.AllowDomains = append(p.AllowDomains, domain)
+	return p
+}
+
+func (p *OAuth) WithScope(scope string) *OAuth {
+	p.Scopes = append(p.Scopes, scope)
+	return p
+}
+
+func (http *HTTPConfig) WithOAuth(cfg *OAuth) *TunnelConfig {
+	http.OAuth = cfg
 	return http.parent
 }
 
