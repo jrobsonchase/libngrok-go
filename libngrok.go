@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	_ "embed"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"strings"
@@ -312,8 +313,13 @@ func (http *HTTPConfig) WithBasicAuth(username, password string) *TunnelConfig {
 	return http.parent
 }
 
-func (cfg *CommonConfig) WithMutualTLS(caBytes []byte) *TunnelConfig {
-	cfg.MutualTLSCA = caBytes
+func (cfg *CommonConfig) WithMutualTLSCA(certs []*x509.Certificate) *TunnelConfig {
+	for _, cert := range certs {
+		cfg.MutualTLSCA = append(cfg.MutualTLSCA, pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: cert.Raw,
+		})...)
+	}
 	return cfg.parent
 }
 
