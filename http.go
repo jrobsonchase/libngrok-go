@@ -54,9 +54,10 @@ type HTTPConfig struct {
 	CommonConfig[HTTPConfig]
 	TLSCommon[HTTPConfig]
 
-	Scheme         Scheme
-	Compression    bool
-	CircuitBreaker float64
+	Scheme                 Scheme
+	Compression            bool
+	WebsocketTCPConversion bool
+	CircuitBreaker         float64
 
 	RequestHeaders  *Headers
 	ResponseHeaders *Headers
@@ -81,6 +82,11 @@ func HTTPOptions() *HTTPConfig {
 
 func (http *HTTPConfig) WithScheme(scheme Scheme) *HTTPConfig {
 	http.Scheme = scheme
+	return http
+}
+
+func (http *HTTPConfig) WithWebsocketTCPConversion() *HTTPConfig {
+	http.WebsocketTCPConversion = true
 	return http
 }
 
@@ -203,6 +209,10 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 
 	if http.Compression {
 		opts.Compression = &pb_agent.MiddlewareConfiguration_Compression{}
+	}
+
+	if http.WebsocketTCPConversion {
+		opts.WebsocketTCPConverter = &pb_agent.MiddlewareConfiguration_WebsocketTCPConverter{}
 	}
 
 	if http.CircuitBreaker != 0 {
