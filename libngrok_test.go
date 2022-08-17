@@ -53,7 +53,7 @@ func TestTunnel(t *testing.T) {
 	ctx := context.Background()
 	sess := setupSession(ctx, t)
 
-	tun := startTunnel(ctx, t, sess, HTTPOptions()).AsTCP()
+	tun := startTunnel(ctx, t, sess, HTTPOptions()).AsListener()
 
 	require.NotEmpty(t, tun.URL(), "Tunnel URL")
 }
@@ -327,7 +327,7 @@ func TestProxyProto(t *testing.T) {
 			sess := setupSession(ctx, t)
 			tun := startTunnel(ctx, t, sess, tcase.optsFunc().
 				WithProxyProtoI(tcase.version),
-			).AsTCP()
+			).AsListener()
 
 			go tcase.reqFunc(t, tun.URL())
 

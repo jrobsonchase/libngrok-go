@@ -80,10 +80,10 @@ type session struct {
 
 // NewSession starts a new go-tunnel client session running over the given
 // muxado session.
-func NewSession(logger log.Logger, mux muxado.Session, handler SessionHandler) Session {
+func NewSession(logger log.Logger, mux muxado.Session, heartbeatConfig *muxado.HeartbeatConfig, handler SessionHandler) Session {
 	logger = newLogger(logger)
 	s := &session{
-		raw:     newRawSession(mux, logger, nil, handler),
+		raw:     newRawSession(mux, logger, heartbeatConfig, handler),
 		Logger:  logger,
 		tunnels: make(map[string]*tunnel),
 	}

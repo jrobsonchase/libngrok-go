@@ -16,7 +16,7 @@ var (
 
 type buffer interface {
 	Read([]byte) (int, error)
-	ReadFrom(io.Reader) (int, error)
+	ReadFrom(io.Reader) (int64, error)
 	SetError(error)
 	SetDeadline(time.Time)
 }
@@ -34,7 +34,7 @@ func (b *inboundBuffer) Init(maxSize int) {
 	b.maxSize = maxSize
 }
 
-func (b *inboundBuffer) ReadFrom(rd io.Reader) (n int, err error) {
+func (b *inboundBuffer) ReadFrom(rd io.Reader) (n int64, err error) {
 	var n64 int64
 	b.mu.Lock()
 	if b.err != nil {
@@ -45,7 +45,7 @@ func (b *inboundBuffer) ReadFrom(rd io.Reader) (n int, err error) {
 	}
 
 	n64, err = b.Buffer.ReadFrom(rd)
-	n += int(n64)
+	n += n64
 	if b.Buffer.Len() > b.maxSize {
 		err = bufferFull
 		b.err = bufferFull
@@ -54,7 +54,7 @@ func (b *inboundBuffer) ReadFrom(rd io.Reader) (n int, err error) {
 	b.cond.Broadcast()
 DONE:
 	b.mu.Unlock()
-	return int(n), err
+	return n, err
 }
 
 func (b *inboundBuffer) Read(p []byte) (n int, err error) {

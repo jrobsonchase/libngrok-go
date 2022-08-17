@@ -12,8 +12,7 @@ type TunnelConfig struct {
 	extra proto.BindExtra
 
 	// Labeled tunnels
-	labels   map[string]string
-	metadata string
+	labels map[string]string
 }
 
 type ToTunnelConfig interface {

@@ -1,6 +1,8 @@
 package libngrok
 
 import (
+	"fmt"
+
 	"github.com/ngrok/libngrok-go/internal/pb_agent"
 	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 )
@@ -9,6 +11,37 @@ type Scheme string
 
 const SchemeHTTP = Scheme("http")
 const SchemeHTTPS = Scheme("https")
+
+type Headers struct {
+	Added   map[string]string
+	Removed []string
+}
+
+func (h *Headers) Add(name, value string) *Headers {
+	h.Added[name] = value
+	return h
+}
+
+func (h *Headers) Remove(name string) *Headers {
+	h.Removed = append(h.Removed, name)
+	return h
+}
+
+func (h *Headers) toProtoConfig() *pb_agent.MiddlewareConfiguration_Headers {
+	if h == nil {
+		return nil
+	}
+
+	headers := &pb_agent.MiddlewareConfiguration_Headers{
+		Remove: h.Removed,
+	}
+
+	for k, v := range h.Added {
+		headers.Add = append(headers.Add, fmt.Sprintf("%s:%s", k, v))
+	}
+
+	return headers
+}
 
 func HTTPHeaders() *Headers {
 	return &Headers{
@@ -203,5 +236,8 @@ func (cfg *HTTPConfig) ToTunnelConfig() TunnelConfig {
 	return TunnelConfig{
 		proto: string(cfg.Scheme),
 		opts:  cfg.toProtoConfig(),
+		extra: proto.BindExtra{
+			Metadata: cfg.Metadata,
+		},
 	}
 }

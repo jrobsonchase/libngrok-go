@@ -11,6 +11,7 @@ type CommonConfig[T any] struct {
 
 	CIDRRestrictions *CIDRRestriction
 	ProxyProto       ProxyProtoVersion
+	Metadata         string
 }
 
 type ProxyProtoVersion int32
@@ -22,6 +23,11 @@ const (
 
 func (cfg *CommonConfig[T]) WithProxyProto(version ProxyProtoVersion) *T {
 	cfg.ProxyProto = version
+	return cfg.parent
+}
+
+func (cfg *CommonConfig[T]) WithMetadata(meta string) *T {
+	cfg.Metadata = meta
 	return cfg.parent
 }
 

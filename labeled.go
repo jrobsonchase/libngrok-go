@@ -1,5 +1,7 @@
 package libngrok
 
+import "github.com/ngrok/libngrok-go/internal/tunnel/proto"
+
 type LabeledConfig struct {
 	Labels   map[string]string
 	Metadata string
@@ -24,7 +26,9 @@ func (lo *LabeledConfig) WithMetadata(meta string) *LabeledConfig {
 
 func (lo *LabeledConfig) ToTunnelConfig() TunnelConfig {
 	return TunnelConfig{
-		labels:   lo.Labels,
-		metadata: lo.Metadata,
+		labels: lo.Labels,
+		extra: proto.BindExtra{
+			Metadata: lo.Metadata,
+		},
 	}
 }

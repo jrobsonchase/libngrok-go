@@ -5,6 +5,7 @@ import (
 	"encoding/pem"
 
 	"github.com/ngrok/libngrok-go/internal/pb_agent"
+	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 )
 
 type TLSCommon[T any] struct {
@@ -32,9 +33,24 @@ func (cfg *TLSCommon[T]) toProtoConfig() *pb_agent.MiddlewareConfiguration_Mutua
 	return opts
 }
 
+type TLSKeypair struct {
+	KeyPEM  []byte
+	CertPEM []byte
+}
+
 type TLSConfig struct {
 	TLSCommon[TLSConfig]
 	CommonConfig[TLSConfig]
+
+	TerminateKeypair *TLSKeypair
+}
+
+func (cfg *TLSConfig) WithEdgeTermination(certPEM, keyPEM []byte) *TLSConfig {
+	cfg.TerminateKeypair = &TLSKeypair{
+		CertPEM: certPEM,
+		KeyPEM:  keyPEM,
+	}
+	return cfg
 }
 
 func TLSOptions() *TLSConfig {
@@ -46,4 +62,34 @@ func TLSOptions() *TLSConfig {
 		parent: opts,
 	}
 	return opts
+}
+
+func (tls *TLSConfig) toProtoConfig() *proto.TLSOptions {
+	opts := &proto.TLSOptions{
+		Hostname:   tls.TLSCommon.Domain,
+		ProxyProto: proto.ProxyProto(tls.CommonConfig.ProxyProto),
+	}
+	if tls.MutualTLSCA != nil {
+		opts.MutualTLSAtEdge = tls.TLSCommon.toProtoConfig()
+	}
+	if tls.CIDRRestrictions != nil {
+		opts.IPRestriction = tls.CIDRRestrictions.toProtoConfig()
+	}
+	if tls.TerminateKeypair != nil {
+		opts.TLSTermination = &pb_agent.MiddlewareConfiguration_TLSTermination{
+			Key:  tls.TerminateKeypair.KeyPEM,
+			Cert: tls.TerminateKeypair.CertPEM,
+		}
+	}
+	return opts
+}
+
+func (tls *TLSConfig) ToTunnelConfig() TunnelConfig {
+	return TunnelConfig{
+		proto: "tls",
+		opts:  tls.toProtoConfig(),
+		extra: proto.BindExtra{
+			Metadata: tls.Metadata,
+		},
+	}
 }
