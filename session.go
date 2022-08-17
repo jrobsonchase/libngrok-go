@@ -22,6 +22,12 @@ type Session interface {
 	Close() error
 
 	StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunnel, error)
+
+	SrvInfo() (SrvInfo, error)
+
+	Heartbeat() (time.Duration, error)
+
+	Latency() <-chan time.Duration
 }
 
 //go:embed ngrok.ca.crt
@@ -206,4 +212,19 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunn
 	return &tunnelImpl{
 		Tunnel: tunnel,
 	}, nil
+}
+
+type SrvInfo proto.SrvInfoResp
+
+func (s *sessionImpl) SrvInfo() (SrvInfo, error) {
+	resp, err := s.TunnelSession.SrvInfo()
+	return SrvInfo(resp), err
+}
+
+func (s *sessionImpl) Heartbeat() (time.Duration, error) {
+	return s.TunnelSession.Heartbeat()
+}
+
+func (s *sessionImpl) Latency() <-chan time.Duration {
+	return s.TunnelSession.Latency()
 }

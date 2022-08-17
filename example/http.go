@@ -44,6 +44,11 @@ func main() {
 	sess, err := libngrok.Connect(ctx, opts)
 	exitErr(err)
 
+	info, err := sess.SrvInfo()
+	exitErr(err)
+
+	fmt.Println("info: ", info)
+
 	tun, err := sess.StartTunnel(ctx, libngrok.
 		HTTPOptions().
 		WithMetadata(`{"foo":"bar"}`).
