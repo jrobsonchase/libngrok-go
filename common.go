@@ -69,12 +69,16 @@ func (ir *CIDRRestriction) toProtoConfig() *pb_agent.MiddlewareConfiguration_IPR
 	}
 }
 
-func (cfg *CommonConfig[T]) WithCIDRRestriction(set *CIDRRestriction) *T {
-	if cfg.CIDRRestrictions != nil && set != nil {
-		cfg.CIDRRestrictions.AllowString(set.Allowed...)
-		cfg.CIDRRestrictions.DenyString(set.Denied...)
-	} else {
-		cfg.CIDRRestrictions = set
+func (cfg *CommonConfig[T]) WithCIDRRestriction(set ...*CIDRRestriction) *T {
+	if cfg.CIDRRestrictions == nil {
+		cfg.CIDRRestrictions = CIDRSet()
+	}
+
+	for _, s := range set {
+		if s != nil {
+			cfg.CIDRRestrictions.AllowString(s.Allowed...)
+			cfg.CIDRRestrictions.DenyString(s.Denied...)
+		}
 	}
 	return cfg.parent
 }

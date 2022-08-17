@@ -28,7 +28,7 @@ type HTTPConfig struct {
 	RequestHeaders  *Headers
 	ResponseHeaders *Headers
 
-	BasicAuth           []*BasicAuth
+	BasicAuth           []BasicAuth
 	OAuth               *OAuth
 	WebhookVerification *WebhookVerification
 }
@@ -71,10 +71,6 @@ func (http *HTTPConfig) WithResponseHeaders(headers *Headers) *HTTPConfig {
 	return http
 }
 
-type BasicAuth struct {
-	Username, Password string
-}
-
 func (ba *BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuthCredential {
 	if ba == nil {
 		return nil
@@ -98,18 +94,18 @@ func OAuthProvider(name string) *OAuth {
 	}
 }
 
-func (p *OAuth) AllowEmail(addr string) *OAuth {
-	p.AllowEmails = append(p.AllowEmails, addr)
+func (p *OAuth) AllowEmail(addr ...string) *OAuth {
+	p.AllowEmails = append(p.AllowEmails, addr...)
 	return p
 }
 
-func (p *OAuth) AllowDomain(domain string) *OAuth {
-	p.AllowDomains = append(p.AllowDomains, domain)
+func (p *OAuth) AllowDomain(domain ...string) *OAuth {
+	p.AllowDomains = append(p.AllowDomains, domain...)
 	return p
 }
 
-func (p *OAuth) WithScope(scope string) *OAuth {
-	p.Scopes = append(p.Scopes, scope)
+func (p *OAuth) WithScope(scope ...string) *OAuth {
+	p.Scopes = append(p.Scopes, scope...)
 	return p
 }
 
@@ -131,11 +127,16 @@ func (oauth *OAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_OAuth {
 	}
 }
 
+type BasicAuth struct {
+	Username, Password string
+}
+
 func (http *HTTPConfig) WithBasicAuth(username, password string) *HTTPConfig {
-	http.BasicAuth = append(http.BasicAuth, &BasicAuth{
-		Username: username,
-		Password: password,
-	})
+	return http.WithBasicAuths(BasicAuth{username, password})
+}
+
+func (http *HTTPConfig) WithBasicAuths(credential ...BasicAuth) *HTTPConfig {
+	http.BasicAuth = append(http.BasicAuth, credential...)
 	return http
 }
 
