@@ -114,7 +114,7 @@ type HTTPConfig struct {
 	RequestHeaders  *Headers
 	ResponseHeaders *Headers
 
-	BasicAuth           *BasicAuth
+	BasicAuth           []*BasicAuth
 	OAuth               *OAuth
 	WebhookVerification *WebhookVerification
 }
@@ -219,13 +219,8 @@ func (http *HTTPConfig) WithScheme(scheme Scheme) *TunnelConfig {
 	return http.parent
 }
 
-func (cfg *CommonConfig) WithSubdomain(domain string) *TunnelConfig {
-	cfg.Subdomain = domain
-	return cfg.parent
-}
-
-func (cfg *CommonConfig) WithHostname(hostname string) *TunnelConfig {
-	cfg.Hostname = hostname
+func (cfg *CommonConfig) WithDomain(name string) *TunnelConfig {
+	cfg.Hostname = name
 	return cfg.parent
 }
 
@@ -253,15 +248,13 @@ type BasicAuth struct {
 	Username, Password string
 }
 
-func (ba *BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuth {
+func (ba *BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuthCredential {
 	if ba == nil {
 		return nil
 	}
-	return &pb_agent.MiddlewareConfiguration_BasicAuth{
-		Credentials: []*pb_agent.MiddlewareConfiguration_BasicAuthCredential{{
-			CleartextPassword: ba.Password,
-			Username:          ba.Username,
-		}},
+	return &pb_agent.MiddlewareConfiguration_BasicAuthCredential{
+		CleartextPassword: ba.Password,
+		Username:          ba.Username,
 	}
 }
 
@@ -306,10 +299,10 @@ func (oauth *OAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_OAuth {
 }
 
 func (http *HTTPConfig) WithBasicAuth(username, password string) *TunnelConfig {
-	http.BasicAuth = &BasicAuth{
+	http.BasicAuth = append(http.BasicAuth, &BasicAuth{
 		Username: username,
 		Password: password,
-	}
+	})
 	return http.parent
 }
 
@@ -372,7 +365,12 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 
 	opts.RequestHeaders = http.RequestHeaders.toProtoConfig()
 	opts.ResponseHeaders = http.ResponseHeaders.toProtoConfig()
-	opts.BasicAuth = http.BasicAuth.toProtoConfig()
+	if len(http.BasicAuth) > 0 {
+		opts.BasicAuth = &pb_agent.MiddlewareConfiguration_BasicAuth{}
+		for _, c := range http.BasicAuth {
+			opts.BasicAuth.Credentials = append(opts.BasicAuth.Credentials, c.toProtoConfig())
+		}
+	}
 	opts.OAuth = http.OAuth.toProtoConfig()
 	opts.WebhookVerification = http.WebhookVerification.toProtoConfig()
 	opts.IPRestriction = http.parent.IPRestrictions.toProtoConfig()

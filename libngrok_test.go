@@ -334,7 +334,7 @@ func TestHostname(t *testing.T) {
 	ctx := context.Background()
 
 	tun, exited := serveHTTP(ctx, t,
-		HTTPOptions().WithHostname("foo.robsonchase.com"),
+		HTTPOptions().WithDomain("foo.robsonchase.com"),
 		helloHandler,
 	)
 	require.Equal(t, "https://foo.robsonchase.com", tun.URL())
@@ -359,7 +359,7 @@ func TestSubdomain(t *testing.T) {
 	subdomain := hex.EncodeToString(buf)
 
 	tun, exited := serveHTTP(ctx, t,
-		HTTPOptions().WithSubdomain(subdomain),
+		HTTPOptions().WithDomain(subdomain+".ngrok.io"),
 		helloHandler,
 	)
 
