@@ -562,3 +562,93 @@ func TestWebsocketConversion(t *testing.T) {
 	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)
 }
+
+func TestWhyThough(t *testing.T) {
+	ctx := context.Background()
+	sess := setupSession(ctx, t)
+	tun := startTunnel(ctx, t, sess,
+		HTTPOptions().
+			WithWebsocketTCPConversion(),
+	)
+
+	go func() {
+		l := tun.AsListener()
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+
+			ngrok, err := net.Dial("tcp", "tunnel.ngrok.com:443")
+			if err != nil {
+				return
+			}
+
+			fmt.Println("forwarding ws connection to ngrok")
+
+			go io.Copy(ngrok, conn)
+			go io.Copy(conn, ngrok)
+		}
+	}()
+
+	wsUrl, err := url.Parse(tun.URL())
+	require.NoError(t, err)
+
+	wsUrl.Scheme = "wss"
+
+	opts := ConnectOptions().
+		WithDialer(&WsDialer{wsUrl}).
+		WithAuthToken(os.Getenv("NGROK_TOKEN"))
+	sess2, err := Connect(ctx, opts)
+	require.NoError(t, err, "Session Connect")
+
+	tun2 := startTunnel(ctx, t, sess2,
+		HTTPOptions().
+			WithWebsocketTCPConversion(),
+	)
+
+	// HTTP over websockets? suuuure lol
+	exited := make(chan error)
+	go func() {
+		exited <- http.Serve(tun2.AsListener(), helloHandler)
+	}()
+
+	resp, err := http.Get(tun2.URL())
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Normal http should be rejected")
+
+	url, err := url.Parse(tun2.URL())
+	require.NoError(t, err)
+
+	url.Scheme = "wss"
+
+	client := http.Client{
+		Transport: &http.Transport{
+			Dial: (&WsDialer{url}).Dial,
+		},
+	}
+
+	resp, err = client.Get("http://example.com")
+	require.NoError(t, err)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "Read response body")
+
+	require.Equal(t, "Hello, world!\n", string(body), "HTTP Body Contents")
+
+	require.NoError(t, tun2.CloseWithContext(ctx))
+	require.NoError(t, tun.CloseWithContext(ctx))
+	require.Error(t, <-exited)
+}
+
+type WsDialer struct {
+	url *url.URL
+}
+
+func (wd *WsDialer) Dial(network, address string) (net.Conn, error) {
+	return websocket.Dial(wd.url.String(), "", fmt.Sprintf("https://%s", wd.url.Hostname()))
+}
+func (wd *WsDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return websocket.Dial(wd.url.String(), "", fmt.Sprintf("https://%s", wd.url.Hostname()))
+}
