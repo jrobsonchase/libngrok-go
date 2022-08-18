@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/websocket"
 )
 
 func setupSession(ctx context.Context, t *testing.T) Session {
@@ -505,6 +506,50 @@ func TestLabeled(t *testing.T) {
 	}
 
 	cancel()
+
+	require.NoError(t, tun.CloseWithContext(ctx))
+	require.Error(t, <-exited)
+}
+
+func TestWebsocketConversion(t *testing.T) {
+	ctx := context.Background()
+	sess := setupSession(ctx, t)
+	tun := startTunnel(ctx, t, sess,
+		HTTPOptions().
+			WithWebsocketTCPConversion(),
+	)
+
+	// HTTP over websockets? suuuure lol
+	exited := make(chan error)
+	go func() {
+		exited <- http.Serve(tun.AsListener(), helloHandler)
+	}()
+
+	resp, err := http.Get(tun.URL())
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Normal http should be rejected")
+
+	url, err := url.Parse(tun.URL())
+	require.NoError(t, err)
+
+	url.Scheme = "wss"
+
+	client := http.Client{
+		Transport: &http.Transport{
+			Dial: func(network, addr string) (net.Conn, error) {
+				return websocket.Dial(url.String(), "", tun.URL())
+			},
+		},
+	}
+
+	resp, err = client.Get("http://example.com")
+	require.NoError(t, err)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "Read response body")
+
+	require.Equal(t, "Hello, world!\n", string(body), "HTTP Body Contents")
 
 	require.NoError(t, tun.CloseWithContext(ctx))
 	require.Error(t, <-exited)

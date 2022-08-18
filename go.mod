@@ -11,16 +11,15 @@ require (
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
-	golang.org/x/net v0.0.0-20220812174116-3211cb980234 // indirect
+	golang.org/x/net v0.0.0-20220812174116-3211cb980234
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
-	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
