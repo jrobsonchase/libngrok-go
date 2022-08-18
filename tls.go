@@ -26,6 +26,9 @@ func (cfg *TLSCommon[T]) WithMutualTLSCA(certs ...*x509.Certificate) *T {
 }
 
 func (cfg *TLSCommon[T]) toProtoConfig() *pb_agent.MiddlewareConfiguration_MutualTLS {
+	if cfg == nil || cfg.MutualTLSCA == nil {
+		return nil
+	}
 	opts := &pb_agent.MiddlewareConfiguration_MutualTLS{}
 	for _, cert := range cfg.MutualTLSCA {
 		opts.MutualTLSCA = append(opts.MutualTLSCA, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})...)
@@ -36,6 +39,17 @@ func (cfg *TLSCommon[T]) toProtoConfig() *pb_agent.MiddlewareConfiguration_Mutua
 type TLSKeypair struct {
 	KeyPEM  []byte
 	CertPEM []byte
+}
+
+func (kp *TLSKeypair) toProtoConfig() *pb_agent.MiddlewareConfiguration_TLSTermination {
+	if kp == nil {
+		return nil
+	}
+
+	return &pb_agent.MiddlewareConfiguration_TLSTermination{
+		Key:  kp.KeyPEM,
+		Cert: kp.CertPEM,
+	}
 }
 
 type TLSConfig struct {
@@ -69,18 +83,13 @@ func (tls *TLSConfig) toProtoConfig() *proto.TLSOptions {
 		Hostname:   tls.TLSCommon.Domain,
 		ProxyProto: proto.ProxyProto(tls.CommonConfig.ProxyProto),
 	}
-	if tls.MutualTLSCA != nil {
-		opts.MutualTLSAtEdge = tls.TLSCommon.toProtoConfig()
-	}
-	if tls.CIDRRestrictions != nil {
-		opts.IPRestriction = tls.CIDRRestrictions.toProtoConfig()
-	}
-	if tls.TerminateKeypair != nil {
-		opts.TLSTermination = &pb_agent.MiddlewareConfiguration_TLSTermination{
-			Key:  tls.TerminateKeypair.KeyPEM,
-			Cert: tls.TerminateKeypair.CertPEM,
-		}
-	}
+
+	opts.IPRestriction = tls.CIDRRestrictions.toProtoConfig()
+
+	opts.MutualTLSAtEdge = tls.TLSCommon.toProtoConfig()
+
+	opts.TLSTermination = tls.TerminateKeypair.toProtoConfig()
+
 	return opts
 }
 

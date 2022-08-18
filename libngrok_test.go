@@ -54,9 +54,13 @@ func TestTunnel(t *testing.T) {
 	ctx := context.Background()
 	sess := setupSession(ctx, t)
 
-	tun := startTunnel(ctx, t, sess, HTTPOptions()).AsListener()
+	tun := startTunnel(ctx, t, sess, HTTPOptions().
+		WithMetadata("Hello, world!").
+		WithForwardsTo("some application"))
 
 	require.NotEmpty(t, tun.URL(), "Tunnel URL")
+	require.Equal(t, "Hello, world!", tun.Metadata())
+	require.Equal(t, "some application", tun.ForwardsTo())
 }
 
 func TestHTTPS(t *testing.T) {
@@ -459,13 +463,13 @@ func TestTCP(t *testing.T) {
 func TestTCPIPRestriction(t *testing.T) {
 	ctx := context.Background()
 
-	_, cidr, err := net.ParseCIDR("0.0.0.0/0")
+	_, cidr, err := net.ParseCIDR("127.0.0.1/32")
 	require.NoError(t, err)
 
 	opts := TCPOptions().WithCIDRRestriction(
 		CIDRSet().
-			AllowString("127.0.0.1/32").
-			Deny(cidr),
+			Allow(cidr).
+			DenyString("0.0.0.0/0"),
 	)
 
 	// Easier to test by pretending it's HTTP on this end.
@@ -486,9 +490,13 @@ func TestTCPIPRestriction(t *testing.T) {
 func TestLabeled(t *testing.T) {
 	ctx := context.Background()
 	tun, exited := serveHTTP(ctx, t,
-		LabeledOptions().WithLabel("edge", "edghts_2CtuOWQFCrvggKT34fRCFXs0AiK"),
+		LabeledOptions().
+			WithLabel("edge", "edghts_2CtuOWQFCrvggKT34fRCFXs0AiK").
+			WithMetadata("Hello, world!"),
 		helloHandler,
 	)
+
+	require.Equal(t, "Hello, world!", tun.Metadata())
 
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 

@@ -13,11 +13,13 @@ import (
 type Tunnel interface {
 	CloseWithContext(context.Context) error
 
+	ForwardsTo() string
+	Metadata() string
+
 	Proto() string
 	URL() string
 
 	Labels() map[string]string
-	Metadata() string
 
 	AsListener() ListenerTunnel
 	AsHTTP() HTTPTunnel
@@ -66,6 +68,10 @@ func (t *tunnelImpl) URL() string {
 
 func (t *tunnelImpl) Proto() string {
 	return t.Tunnel.RemoteBindConfig().ConfigProto
+}
+
+func (t *tunnelImpl) ForwardsTo() string {
+	return t.Tunnel.ForwardsTo()
 }
 
 func (t *tunnelImpl) Metadata() string {

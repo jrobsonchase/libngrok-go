@@ -110,10 +110,7 @@ func (http *HTTPConfig) WithResponseHeaders(headers *Headers) *HTTPConfig {
 	return http
 }
 
-func (ba *BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuthCredential {
-	if ba == nil {
-		return nil
-	}
+func (ba BasicAuth) toProtoConfig() *pb_agent.MiddlewareConfiguration_BasicAuthCredential {
 	return &pb_agent.MiddlewareConfiguration_BasicAuthCredential{
 		CleartextPassword: ba.Password,
 		Username:          ba.Username,
@@ -221,9 +218,7 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 		}
 	}
 
-	if http.MutualTLSCA != nil {
-		opts.MutualTLSCA = http.TLSCommon.toProtoConfig()
-	}
+	opts.MutualTLSCA = http.TLSCommon.toProtoConfig()
 
 	opts.ProxyProto = proto.ProxyProto(http.ProxyProto)
 
