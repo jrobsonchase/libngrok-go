@@ -168,10 +168,10 @@ type BasicAuth struct {
 }
 
 func (http *HTTPConfig) WithBasicAuth(username, password string) *HTTPConfig {
-	return http.WithBasicAuths(BasicAuth{username, password})
+	return http.WithBasicAuthCreds(BasicAuth{username, password})
 }
 
-func (http *HTTPConfig) WithBasicAuths(credential ...BasicAuth) *HTTPConfig {
+func (http *HTTPConfig) WithBasicAuthCreds(credential ...BasicAuth) *HTTPConfig {
 	http.BasicAuth = append(http.BasicAuth, credential...)
 	return http
 }
