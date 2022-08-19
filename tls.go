@@ -93,8 +93,8 @@ func (tls *TLSConfig) toProtoConfig() *proto.TLSOptions {
 	return opts
 }
 
-func (tls *TLSConfig) ToTunnelConfig() TunnelConfig {
-	return TunnelConfig{
+func (tls *TLSConfig) tunnelConfig() tunnelConfig {
+	return tunnelConfig{
 		forwardsTo: tls.ForwardsTo,
 		proto:      "tls",
 		opts:       tls.toProtoConfig(),

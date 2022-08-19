@@ -2,7 +2,7 @@ package libngrok
 
 import "github.com/ngrok/libngrok-go/internal/tunnel/proto"
 
-type TunnelConfig struct {
+type tunnelConfig struct {
 	// Note: Only one set of options should be set at a time - either proto,
 	// opts, and extra, or labels and metadata.
 	forwardsTo string
@@ -16,6 +16,6 @@ type TunnelConfig struct {
 	labels map[string]string
 }
 
-type ToTunnelConfig interface {
-	ToTunnelConfig() TunnelConfig
+type TunnelConfig interface {
+	tunnelConfig() tunnelConfig
 }

@@ -237,8 +237,8 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 	return opts
 }
 
-func (cfg *HTTPConfig) ToTunnelConfig() TunnelConfig {
-	return TunnelConfig{
+func (cfg *HTTPConfig) tunnelConfig() tunnelConfig {
+	return tunnelConfig{
 		forwardsTo: cfg.ForwardsTo,
 		proto:      string(cfg.Scheme),
 		opts:       cfg.toProtoConfig(),

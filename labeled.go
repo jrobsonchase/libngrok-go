@@ -30,8 +30,8 @@ func (lo *LabeledConfig) WithMetadata(meta string) *LabeledConfig {
 	return lo
 }
 
-func (lo *LabeledConfig) ToTunnelConfig() TunnelConfig {
-	return TunnelConfig{
+func (lo *LabeledConfig) tunnelConfig() tunnelConfig {
+	return tunnelConfig{
 		forwardsTo: lo.ForwardsTo,
 		labels:     lo.Labels,
 		extra: proto.BindExtra{

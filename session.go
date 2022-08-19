@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"runtime"
 	"strings"
 	"time"
 
@@ -18,10 +19,12 @@ import (
 	"golang.org/x/net/proxy"
 )
 
+const VERSION = "4.0.0-library"
+
 type Session interface {
 	Close() error
 
-	StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunnel, error)
+	StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel, error)
 
 	SrvInfo() (SrvInfo, error)
 
@@ -166,10 +169,15 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 
 	tunnelSess := tunnel_client.NewSession(cfg.Logger, sess, cfg.HeartbeatConfig, nopHandler{})
 	resp, err := tunnelSess.Auth(proto.AuthExtra{
-		Version:   "4.0.0-library",
-		Authtoken: cfg.AuthToken,
-		Metadata:  cfg.Metadata,
-		// TODO: More metadata here
+		Version:            VERSION,
+		Authtoken:          cfg.AuthToken,
+		Metadata:           cfg.Metadata,
+		OS:                 runtime.GOOS,
+		Arch:               runtime.GOARCH,
+		HeartbeatInterval:  int64(cfg.HeartbeatConfig.Interval),
+		HeartbeatTolerance: int64(cfg.HeartbeatConfig.Tolerance),
+
+		// TODO: More fields here?
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to send auth request: %w", err)
@@ -191,13 +199,13 @@ func (s *sessionImpl) Close() error {
 	return s.TunnelSession.Close()
 }
 
-func (s *sessionImpl) StartTunnel(ctx context.Context, cfg ToTunnelConfig) (Tunnel, error) {
+func (s *sessionImpl) StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel, error) {
 	var (
 		tunnel tunnel_client.Tunnel
 		err    error
 	)
 
-	tunnelCfg := cfg.ToTunnelConfig()
+	tunnelCfg := cfg.tunnelConfig()
 
 	if tunnelCfg.proto != "" {
 		tunnel, err = s.TunnelSession.Listen(tunnelCfg.proto, tunnelCfg.opts, tunnelCfg.extra, tunnelCfg.forwardsTo)

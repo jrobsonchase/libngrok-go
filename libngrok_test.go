@@ -26,7 +26,7 @@ func setupSession(ctx context.Context, t *testing.T) Session {
 	return sess
 }
 
-func startTunnel(ctx context.Context, t *testing.T, sess Session, opts ToTunnelConfig) Tunnel {
+func startTunnel(ctx context.Context, t *testing.T, sess Session, opts TunnelConfig) Tunnel {
 	tun, err := sess.StartTunnel(ctx, opts)
 	require.NoError(t, err, "StartTunnel")
 	return tun
@@ -36,7 +36,7 @@ var helloHandler = http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request
 	_, _ = fmt.Fprintln(rw, "Hello, world!")
 })
 
-func serveHTTP(ctx context.Context, t *testing.T, opts ToTunnelConfig, handler http.Handler) (Tunnel, <-chan error) {
+func serveHTTP(ctx context.Context, t *testing.T, opts TunnelConfig, handler http.Handler) (Tunnel, <-chan error) {
 	sess := setupSession(ctx, t)
 
 	tun := startTunnel(ctx, t, sess, opts)
@@ -264,15 +264,15 @@ func TestCircuitBreaker(t *testing.T) {
 }
 
 type TestConfig interface {
-	ToTunnelConfig
-	WithProxyProtoI(version ProxyProtoVersion) ToTunnelConfig
+	TunnelConfig
+	WithProxyProtoI(version ProxyProtoVersion) TunnelConfig
 }
 
-func (http *HTTPConfig) WithProxyProtoI(version ProxyProtoVersion) ToTunnelConfig {
+func (http *HTTPConfig) WithProxyProtoI(version ProxyProtoVersion) TunnelConfig {
 	return http.WithProxyProto(version)
 }
 
-func (tcp *TCPConfig) WithProxyProtoI(version ProxyProtoVersion) ToTunnelConfig {
+func (tcp *TCPConfig) WithProxyProtoI(version ProxyProtoVersion) TunnelConfig {
 	return tcp.WithProxyProto(version)
 }
 

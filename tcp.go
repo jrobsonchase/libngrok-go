@@ -28,8 +28,8 @@ func (tcp *TCPConfig) toProtoConfig() *proto.TCPOptions {
 	}
 }
 
-func (tcp *TCPConfig) ToTunnelConfig() TunnelConfig {
-	return TunnelConfig{
+func (tcp *TCPConfig) tunnelConfig() tunnelConfig {
+	return tunnelConfig{
 		forwardsTo: tcp.ForwardsTo,
 		proto:      "tcp",
 		opts:       tcp.toProtoConfig(),
