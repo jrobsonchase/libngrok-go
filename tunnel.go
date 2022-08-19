@@ -15,6 +15,7 @@ type Tunnel interface {
 
 	ForwardsTo() string
 	Metadata() string
+	ID() string
 
 	Proto() string
 	URL() string
@@ -76,6 +77,10 @@ func (t *tunnelImpl) ForwardsTo() string {
 
 func (t *tunnelImpl) Metadata() string {
 	return t.Tunnel.RemoteBindConfig().Metadata
+}
+
+func (t *tunnelImpl) ID() string {
+	return t.Tunnel.ID()
 }
 
 func (t *tunnelImpl) Labels() map[string]string {
