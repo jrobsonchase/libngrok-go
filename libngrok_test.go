@@ -45,7 +45,7 @@ func serveHTTP(ctx context.Context, t *testing.T, opts TunnelConfig, handler htt
 	httpTun := tun.AsHTTP()
 
 	go func() {
-		exited <- httpTun.Serve(handler)
+		exited <- httpTun.Serve(ctx, handler)
 	}()
 	return tun, exited
 }

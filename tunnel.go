@@ -33,7 +33,7 @@ type ListenerTunnel interface {
 
 type HTTPTunnel interface {
 	Tunnel
-	Serve(http.Handler) error
+	Serve(context.Context, http.Handler) error
 }
 
 type tunnelImpl struct {
@@ -95,8 +95,12 @@ func (t *tunnelImpl) AsListener() ListenerTunnel {
 	return t
 }
 
-func (t *tunnelImpl) Serve(h http.Handler) error {
-	return http.Serve(t, h)
+func (t *tunnelImpl) Serve(ctx context.Context, h http.Handler) error {
+	srv := http.Server{
+		Handler:     h,
+		BaseContext: func(l net.Listener) context.Context { return ctx },
+	}
+	return srv.Serve(t)
 }
 
 type Conn interface {

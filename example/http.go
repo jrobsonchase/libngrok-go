@@ -61,7 +61,7 @@ func main() {
 	l := tun.AsHTTP()
 	fmt.Println("url: ", l.URL())
 
-	err = l.Serve(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	err = l.Serve(ctx, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		spew.Fdump(w, r)
 	}))
 	exitErr(err)
