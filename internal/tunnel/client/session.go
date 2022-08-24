@@ -14,7 +14,7 @@ import (
 	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 
 	log "github.com/inconshreveable/log15"
-	muxado "github.com/inconshreveable/muxado"
+	muxado "github.com/ngrok/libngrok-go/internal/muxado"
 )
 
 // Session is a higher-level client session interface. You will almost always prefer this over

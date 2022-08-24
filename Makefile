@@ -7,11 +7,11 @@ examples: example/http
 
 .PHONY: run-example-%
 run-example-%:
-	go run example/$*.go
+	cd example && go run $*.go
 
 .PHONY: example/%
 example/%: example/%.go
-	go build -o $@ $<
+	cd example && go build -o $* $*.go
 
 .PHONY: test
 test:

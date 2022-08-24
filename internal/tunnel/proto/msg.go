@@ -3,7 +3,7 @@ package proto
 import (
 	"github.com/ngrok/libngrok-go/internal/pb_agent"
 
-	"github.com/inconshreveable/muxado"
+	"github.com/ngrok/libngrok-go/internal/muxado"
 )
 
 type ReqType muxado.StreamType

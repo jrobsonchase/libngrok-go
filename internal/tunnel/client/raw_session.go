@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ngrok/libngrok-go/internal/muxado"
 	"github.com/ngrok/libngrok-go/internal/tunnel/netx"
 	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 
 	log "github.com/inconshreveable/log15"
 	logext "github.com/inconshreveable/log15/ext"
-	"github.com/inconshreveable/muxado"
 )
 
 type RawSession interface {

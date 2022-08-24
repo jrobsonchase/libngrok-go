@@ -16,9 +16,10 @@ import (
 	"unsafe"
 
 	"github.com/inconshreveable/log15"
-	"github.com/inconshreveable/muxado"
+	"github.com/ngrok/libngrok-go/internal/muxado"
 	tunnel_client "github.com/ngrok/libngrok-go/internal/tunnel/client"
 	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
+	"github.com/ngrok/libngrok-go/log"
 	"golang.org/x/net/proxy"
 )
 
@@ -146,8 +147,22 @@ func (cfg *ConnectConfig) WithHeartbeatInterval(interval time.Duration) *Connect
 	return cfg
 }
 
-func (cfg *ConnectConfig) WithLogger(logger log15.Logger) *ConnectConfig {
+// Log to a log15.Logger.
+// This is the logging interface that the internals use, so this is the most
+// direct way to set a logger.
+func (cfg *ConnectConfig) WithLog15(logger log15.Logger) *ConnectConfig {
 	cfg.Logger = logger
+	return cfg
+}
+
+// Log to a simplified logging interface.
+// This is a "lowest common denominator" interface that should be simple to
+// adapt other loggers to. Examples are provided in `log15adapter` and
+// `pgxadapter`.
+// If the provided `Logger` also implements the `log15.Logger` interface, it
+// will be used directly.
+func (cfg *ConnectConfig) WithLogger(logger log.Logger) *ConnectConfig {
+	cfg.Logger = toLog15(logger)
 	return cfg
 }
 
@@ -167,6 +182,11 @@ func (cfg *ConnectConfig) WithReconnectCookie(cookie string) *ConnectConfig {
 }
 
 func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
+	if cfg.Logger == nil {
+		cfg.Logger = log15.New()
+		cfg.Logger.SetHandler(log15.DiscardHandler())
+	}
+
 	if cfg.CAPool == nil {
 		cfg.CAPool = x509.NewCertPool()
 		cfg.CAPool.AppendCertsFromPEM(defaultCACert)
@@ -180,11 +200,6 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		RootCAs:    cfg.CAPool,
 		ServerName: strings.Split(cfg.ServerAddr, ":")[0],
 		MinVersion: tls.VersionTLS12,
-	}
-
-	if cfg.Logger == nil {
-		cfg.Logger = log15.New()
-		cfg.Logger.SetHandler(log15.DiscardHandler())
 	}
 
 	var dialer Dialer

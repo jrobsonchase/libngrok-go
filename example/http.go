@@ -11,7 +11,9 @@ import (
 	"os"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/inconshreveable/log15"
 	libngrok "github.com/ngrok/libngrok-go"
+	"github.com/ngrok/libngrok-go/log/log15adapter"
 )
 
 func exitErr(err error) {
@@ -20,6 +22,7 @@ func exitErr(err error) {
 		os.Exit(1)
 	}
 }
+
 func main() {
 	ctx := context.Background()
 
@@ -32,6 +35,7 @@ func main() {
 			WithAuthToken(os.Getenv("NGROK_TOKEN")).
 			WithReconnectCookie(reconnectCookie).
 			WithServer(os.Getenv("NGROK_SERVER")).
+			WithLogger(log15adapter.NewLogger(log15.New())).
 			WithMetadata("Hello, world!").
 			WithRemoteCallbacks(libngrok.RemoteCallbacks{
 				OnStop: func(sess libngrok.Session) error {
