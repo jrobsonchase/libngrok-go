@@ -577,7 +577,7 @@ func TestConnectcionCallbacks(t *testing.T) {
 	connects := 0
 	disconnectErrs := 0
 	disconnectNils := 0
-	sess := setupSession(ctx, t, ConnectOptions().WithCallbacks(Callbacks{
+	sess := setupSession(ctx, t, ConnectOptions().WithLocalCallbacks(LocalCallbacks{
 		OnConnect: func(sess Session) {
 			connects += 1
 		},
@@ -627,7 +627,7 @@ func TestHeartbeatCallback(t *testing.T) {
 
 	ctx := context.Background()
 	heartbeats := 0
-	sess := setupSession(ctx, t, ConnectOptions().WithCallbacks(Callbacks{
+	sess := setupSession(ctx, t, ConnectOptions().WithLocalCallbacks(LocalCallbacks{
 		OnHeartbeat: func(sess Session, latency time.Duration) {
 			heartbeats += 1
 		},

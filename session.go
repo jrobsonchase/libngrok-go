@@ -30,6 +30,7 @@ type Session interface {
 	StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel, error)
 
 	SrvInfo() (SrvInfo, error)
+	AuthResp() AuthResp
 
 	Heartbeat() (time.Duration, error)
 
@@ -46,10 +47,15 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-type Callbacks struct {
+type LocalCallbacks struct {
 	OnConnect    func(sess Session)
 	OnDisconnect func(sess Session, err error)
 	OnHeartbeat  func(sess Session, latency time.Duration)
+}
+
+type RemoteCallbacks struct {
+	OnStop    func(sess Session) error
+	OnRestart func(sess Session) error
 }
 
 type ConnectConfig struct {
@@ -66,7 +72,10 @@ type ConnectConfig struct {
 
 	HeartbeatConfig *muxado.HeartbeatConfig
 
-	Callbacks Callbacks
+	LocalCallbacks  LocalCallbacks
+	RemoteCallbacks RemoteCallbacks
+
+	Cookie string
 
 	Logger log15.Logger
 }
@@ -127,8 +136,18 @@ func (cfg *ConnectConfig) WithLogger(logger log15.Logger) *ConnectConfig {
 	return cfg
 }
 
-func (cfg *ConnectConfig) WithCallbacks(callbacks Callbacks) *ConnectConfig {
-	cfg.Callbacks = callbacks
+func (cfg *ConnectConfig) WithLocalCallbacks(callbacks LocalCallbacks) *ConnectConfig {
+	cfg.LocalCallbacks = callbacks
+	return cfg
+}
+
+func (cfg *ConnectConfig) WithRemoteCallbacks(callbacks RemoteCallbacks) *ConnectConfig {
+	cfg.RemoteCallbacks = callbacks
+	return cfg
+}
+
+func (cfg *ConnectConfig) WithReconnectCookie(cookie string) *ConnectConfig {
+	cfg.Cookie = cookie
 	return cfg
 }
 
@@ -173,7 +192,15 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		}
 	}
 
+	session := new(sessionImpl)
+
 	stateChanges := make(chan error, 32)
+
+	callbackHandler := remoteCallbackHandler{
+		Logger: cfg.Logger,
+		sess:   session,
+		cb:     cfg.RemoteCallbacks,
+	}
 
 	rawDialer := func() (tunnel_client.RawSession, error) {
 		conn, err := dialer.DialContext(ctx, "tcp", cfg.ServerAddr)
@@ -184,7 +211,19 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		conn = tls.Client(conn, tlsConfig)
 
 		sess := muxado.Client(conn, &muxado.Config{})
-		return tunnel_client.NewRawSession(cfg.Logger, sess, cfg.HeartbeatConfig, nopHandler{}), nil
+		return tunnel_client.NewRawSession(cfg.Logger, sess, cfg.HeartbeatConfig, callbackHandler), nil
+	}
+
+	empty := ""
+	notImplemented := "not implemented"
+	notSupported := "libraries don't support remote updates"
+
+	var remoteStopErr, remoteRestartErr = &notImplemented, &notImplemented
+	if cfg.RemoteCallbacks.OnStop != nil {
+		remoteStopErr = &empty
+	}
+	if cfg.RemoteCallbacks.OnRestart != nil {
+		remoteRestartErr = &empty
 	}
 
 	auth := proto.AuthExtra{
@@ -196,10 +235,14 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		HeartbeatInterval:  int64(cfg.HeartbeatConfig.Interval),
 		HeartbeatTolerance: int64(cfg.HeartbeatConfig.Tolerance),
 
+		RestartUnsupportedError: remoteRestartErr,
+		StopUnsupportedError:    remoteStopErr,
+		UpdateUnsupportedError:  &notSupported,
+
+		Cookie: cfg.Cookie,
+
 		// TODO: More fields here?
 	}
-
-	session := new(sessionImpl)
 
 	reconnect := func(sess tunnel_client.Session) error {
 		resp, err := sess.Auth(auth)
@@ -210,9 +253,12 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 			return errors.New(resp.Error)
 		}
 
-		session.setInner(sess)
+		session.setInner(&sessionInner{
+			Session:  sess,
+			AuthResp: resp,
+		})
 
-		if cfg.Callbacks.OnHeartbeat != nil {
+		if cfg.LocalCallbacks.OnHeartbeat != nil {
 			go func() {
 				beats := session.Latency()
 				for {
@@ -223,7 +269,7 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 						if !ok {
 							return
 						}
-						cfg.Callbacks.OnHeartbeat(session, latency)
+						cfg.LocalCallbacks.OnHeartbeat(session, latency)
 					}
 				}
 			}()
@@ -244,8 +290,8 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		}
 	}
 
-	if cfg.Callbacks.OnConnect != nil {
-		cfg.Callbacks.OnConnect(session)
+	if cfg.LocalCallbacks.OnConnect != nil {
+		cfg.LocalCallbacks.OnConnect(session)
 	}
 
 	go func() {
@@ -255,17 +301,17 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 				return
 			case err, ok := <-stateChanges:
 				if !ok {
-					if cfg.Callbacks.OnDisconnect != nil {
+					if cfg.LocalCallbacks.OnDisconnect != nil {
 						cfg.Logger.Info("no more state changes")
-						cfg.Callbacks.OnDisconnect(session, nil)
+						cfg.LocalCallbacks.OnDisconnect(session, nil)
 					}
 					return
 				}
-				if err == nil && cfg.Callbacks.OnConnect != nil {
-					cfg.Callbacks.OnConnect(session)
+				if err == nil && cfg.LocalCallbacks.OnConnect != nil {
+					cfg.LocalCallbacks.OnConnect(session)
 				}
-				if err != nil && cfg.Callbacks.OnDisconnect != nil {
-					cfg.Callbacks.OnDisconnect(session, err)
+				if err != nil && cfg.LocalCallbacks.OnDisconnect != nil {
+					cfg.LocalCallbacks.OnDisconnect(session, err)
 				}
 			}
 		}
@@ -278,16 +324,21 @@ type sessionImpl struct {
 	raw unsafe.Pointer
 }
 
-func (s *sessionImpl) inner() tunnel_client.Session {
+type sessionInner struct {
+	tunnel_client.Session
+	AuthResp proto.AuthResp
+}
+
+func (s *sessionImpl) inner() *sessionInner {
 	ptr := atomic.LoadPointer(&s.raw)
 	if ptr == nil {
 		return nil
 	}
-	return *(*tunnel_client.Session)(ptr)
+	return (*sessionInner)(ptr)
 }
 
-func (s *sessionImpl) setInner(raw tunnel_client.Session) {
-	atomic.StorePointer(&s.raw, unsafe.Pointer(&raw))
+func (s *sessionImpl) setInner(raw *sessionInner) {
+	atomic.StorePointer(&s.raw, unsafe.Pointer(raw))
 }
 
 func (s *sessionImpl) Close() error {
@@ -318,6 +369,11 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel
 }
 
 type SrvInfo proto.SrvInfoResp
+type AuthResp proto.AuthResp
+
+func (s *sessionImpl) AuthResp() AuthResp {
+	return AuthResp(s.inner().AuthResp)
+}
 
 func (s *sessionImpl) SrvInfo() (SrvInfo, error) {
 	resp, err := s.inner().SrvInfo()
@@ -331,3 +387,45 @@ func (s *sessionImpl) Heartbeat() (time.Duration, error) {
 func (s *sessionImpl) Latency() <-chan time.Duration {
 	return s.inner().Latency()
 }
+
+type remoteCallbackHandler struct {
+	log15.Logger
+	sess Session
+	cb   RemoteCallbacks
+}
+
+func (rc remoteCallbackHandler) OnStop(_ *proto.Stop, respond tunnel_client.HandlerRespFunc) {
+	if rc.cb.OnStop != nil {
+		resp := new(proto.StopResp)
+		close := true
+		if err := rc.cb.OnStop(rc.sess); err != nil {
+			close = false
+			resp.Error = err.Error()
+		}
+		if err := respond(resp); err != nil {
+			rc.Warn("error responding to stop request", "error", err)
+		}
+		if close {
+			_ = rc.sess.Close()
+		}
+	}
+}
+
+func (rc remoteCallbackHandler) OnRestart(_ *proto.Restart, respond tunnel_client.HandlerRespFunc) {
+	if rc.cb.OnRestart != nil {
+		resp := new(proto.RestartResp)
+		close := true
+		if err := rc.cb.OnRestart(rc.sess); err != nil {
+			close = false
+			resp.Error = err.Error()
+		}
+		if err := respond(resp); err != nil {
+			rc.Warn("error responding to restart request", "error", err)
+		}
+		if close {
+			_ = rc.sess.Close()
+		}
+	}
+
+}
+func (rc remoteCallbackHandler) OnUpdate(*proto.Update, tunnel_client.HandlerRespFunc) {}

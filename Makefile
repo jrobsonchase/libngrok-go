@@ -5,6 +5,11 @@ build:
 .PHONY: examples
 examples: example/http
 
+.PHONY: run-example-%
+run-example-%:
+	go run example/$*.go
+
+.PHONY: example/%
 example/%: example/%.go
 	go build -o $@ $<
 

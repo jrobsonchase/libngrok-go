@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	tunnel_client "github.com/ngrok/libngrok-go/internal/tunnel/client"
-	"github.com/ngrok/libngrok-go/internal/tunnel/proto"
 )
 
 type Tunnel interface {
@@ -113,9 +112,3 @@ type connImpl struct {
 	net.Conn
 	Proxy *tunnel_client.ProxyConn
 }
-
-type nopHandler struct{}
-
-func (nopHandler) OnStop(*proto.Stop, tunnel_client.HandlerRespFunc)       {}
-func (nopHandler) OnRestart(*proto.Restart, tunnel_client.HandlerRespFunc) {}
-func (nopHandler) OnUpdate(*proto.Update, tunnel_client.HandlerRespFunc)   {}
