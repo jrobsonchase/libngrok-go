@@ -47,14 +47,29 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
+// Callbacks in response to local(ish) network events.
 type LocalCallbacks struct {
-	OnConnect    func(sess Session)
+	// Called any time a session (re)connects.
+	OnConnect func(sess Session)
+	// Called any time a session disconnects.
+	// If the session has been closed locally, `OnDisconnect` will be called a
+	// final time with a `nil` `err`.
 	OnDisconnect func(sess Session, err error)
-	OnHeartbeat  func(sess Session, latency time.Duration)
+	// Called any time an automatic heartbeat response is received.
+	// This does not include on-demand heartbeating via the `Session.Heartbeat`
+	// method.
+	OnHeartbeat func(sess Session, latency time.Duration)
 }
 
+// Callbacks in response to remote requests
 type RemoteCallbacks struct {
-	OnStop    func(sess Session) error
+	// Called when a stop is requested via the dashboard or API.
+	// If it returns nil, success will be reported and the session closed.
+	OnStop func(sess Session) error
+	// Called when a restart is requested via the dashboard or API.
+	// If it returns nil, success will be reported and the session closed.
+	// It is the implementer's responsibility to ensure that the application
+	// recreates the session.
 	OnRestart func(sess Session) error
 }
 
