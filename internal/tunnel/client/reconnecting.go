@@ -269,8 +269,8 @@ func (s *reconnectingSession) connect(acceptErr error) error {
 	if acceptErr != nil {
 		if atomic.LoadInt32(&s.closed) == 0 {
 			s.Error("session closed, starting reconnect loop", "err", acceptErr)
+			s.stateChanges <- acceptErr
 		}
-		s.stateChanges <- acceptErr
 	}
 
 	for {

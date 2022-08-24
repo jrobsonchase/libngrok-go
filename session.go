@@ -5,12 +5,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	_ "embed"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/inconshreveable/log15"
 	"github.com/inconshreveable/muxado"
@@ -43,6 +46,12 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
+type Callbacks struct {
+	OnConnect    func(sess Session)
+	OnDisconnect func(sess Session, err error)
+	OnHeartbeat  func(sess Session, latency time.Duration)
+}
+
 type ConnectConfig struct {
 	AuthToken  string
 	ServerAddr string
@@ -56,6 +65,8 @@ type ConnectConfig struct {
 	Metadata string
 
 	HeartbeatConfig *muxado.HeartbeatConfig
+
+	Callbacks Callbacks
 
 	Logger log15.Logger
 }
@@ -116,8 +127,12 @@ func (cfg *ConnectConfig) WithLogger(logger log15.Logger) *ConnectConfig {
 	return cfg
 }
 
+func (cfg *ConnectConfig) WithCallbacks(callbacks Callbacks) *ConnectConfig {
+	cfg.Callbacks = callbacks
+	return cfg
+}
+
 func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
-	var err error
 	if cfg.CAPool == nil {
 		cfg.CAPool = x509.NewCertPool()
 		cfg.CAPool.AppendCertsFromPEM(defaultCACert)
@@ -158,17 +173,21 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		}
 	}
 
-	conn, err := dialer.DialContext(ctx, "tcp", cfg.ServerAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to ngrok server: %w", err)
+	stateChanges := make(chan error, 32)
+
+	rawDialer := func() (tunnel_client.RawSession, error) {
+		conn, err := dialer.DialContext(ctx, "tcp", cfg.ServerAddr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to ngrok server: %w", err)
+		}
+
+		conn = tls.Client(conn, tlsConfig)
+
+		sess := muxado.Client(conn, &muxado.Config{})
+		return tunnel_client.NewRawSession(cfg.Logger, sess, cfg.HeartbeatConfig, nopHandler{}), nil
 	}
 
-	conn = tls.Client(conn, tlsConfig)
-
-	sess := muxado.Client(conn, &muxado.Config{})
-
-	tunnelSess := tunnel_client.NewSession(cfg.Logger, sess, cfg.HeartbeatConfig, nopHandler{})
-	resp, err := tunnelSess.Auth(proto.AuthExtra{
+	auth := proto.AuthExtra{
 		Version:            VERSION,
 		Authtoken:          cfg.AuthToken,
 		Metadata:           cfg.Metadata,
@@ -178,25 +197,101 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		HeartbeatTolerance: int64(cfg.HeartbeatConfig.Tolerance),
 
 		// TODO: More fields here?
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to send auth request: %w", err)
-	}
-	if resp.Error != "" {
-		return nil, fmt.Errorf("authentication error: %s", resp.Error)
 	}
 
-	return &sessionImpl{
-		TunnelSession: tunnelSess,
-	}, nil
+	session := new(sessionImpl)
+
+	reconnect := func(sess tunnel_client.Session) error {
+		resp, err := sess.Auth(auth)
+		if err != nil {
+			if resp.Error == "" {
+				return fmt.Errorf("failed to send auth request: %w", err)
+			}
+			return errors.New(resp.Error)
+		}
+
+		session.setInner(sess)
+
+		if cfg.Callbacks.OnHeartbeat != nil {
+			go func() {
+				beats := session.Latency()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case latency, ok := <-beats:
+						if !ok {
+							return
+						}
+						cfg.Callbacks.OnHeartbeat(session, latency)
+					}
+				}
+			}()
+		}
+
+		auth.Cookie = resp.Extra.Cookie
+		return nil
+	}
+
+	_ = tunnel_client.NewReconnectingSession(cfg.Logger, rawDialer, stateChanges, reconnect)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-stateChanges:
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if cfg.Callbacks.OnConnect != nil {
+		cfg.Callbacks.OnConnect(session)
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case err, ok := <-stateChanges:
+				if !ok {
+					if cfg.Callbacks.OnDisconnect != nil {
+						cfg.Logger.Info("no more state changes")
+						cfg.Callbacks.OnDisconnect(session, nil)
+					}
+					return
+				}
+				if err == nil && cfg.Callbacks.OnConnect != nil {
+					cfg.Callbacks.OnConnect(session)
+				}
+				if err != nil && cfg.Callbacks.OnDisconnect != nil {
+					cfg.Callbacks.OnDisconnect(session, err)
+				}
+			}
+		}
+	}()
+
+	return session, nil
 }
 
 type sessionImpl struct {
-	TunnelSession tunnel_client.Session
+	raw unsafe.Pointer
+}
+
+func (s *sessionImpl) inner() tunnel_client.Session {
+	ptr := atomic.LoadPointer(&s.raw)
+	if ptr == nil {
+		return nil
+	}
+	return *(*tunnel_client.Session)(ptr)
+}
+
+func (s *sessionImpl) setInner(raw tunnel_client.Session) {
+	atomic.StorePointer(&s.raw, unsafe.Pointer(&raw))
 }
 
 func (s *sessionImpl) Close() error {
-	return s.TunnelSession.Close()
+	return s.inner().Close()
 }
 
 func (s *sessionImpl) StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel, error) {
@@ -208,9 +303,9 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel
 	tunnelCfg := cfg.tunnelConfig()
 
 	if tunnelCfg.proto != "" {
-		tunnel, err = s.TunnelSession.Listen(tunnelCfg.proto, tunnelCfg.opts, tunnelCfg.extra, tunnelCfg.forwardsTo)
+		tunnel, err = s.inner().Listen(tunnelCfg.proto, tunnelCfg.opts, tunnelCfg.extra, tunnelCfg.forwardsTo)
 	} else {
-		tunnel, err = s.TunnelSession.ListenLabel(tunnelCfg.labels, tunnelCfg.extra.Metadata, tunnelCfg.forwardsTo)
+		tunnel, err = s.inner().ListenLabel(tunnelCfg.labels, tunnelCfg.extra.Metadata, tunnelCfg.forwardsTo)
 	}
 
 	if err != nil {
@@ -225,14 +320,14 @@ func (s *sessionImpl) StartTunnel(ctx context.Context, cfg TunnelConfig) (Tunnel
 type SrvInfo proto.SrvInfoResp
 
 func (s *sessionImpl) SrvInfo() (SrvInfo, error) {
-	resp, err := s.TunnelSession.SrvInfo()
+	resp, err := s.inner().SrvInfo()
 	return SrvInfo(resp), err
 }
 
 func (s *sessionImpl) Heartbeat() (time.Duration, error) {
-	return s.TunnelSession.Heartbeat()
+	return s.inner().Heartbeat()
 }
 
 func (s *sessionImpl) Latency() <-chan time.Duration {
-	return s.TunnelSession.Latency()
+	return s.inner().Latency()
 }
