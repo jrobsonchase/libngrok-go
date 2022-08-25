@@ -2,7 +2,6 @@ package libngrok
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 
@@ -42,7 +41,7 @@ type tunnelImpl struct {
 func (t *tunnelImpl) Accept() (net.Conn, error) {
 	conn, err := t.Tunnel.Accept()
 	if err != nil {
-		return nil, fmt.Errorf("failed to accept tunnel connection: %w", err)
+		return nil, ErrAcceptFailed{Inner: err}
 	}
 	return &connImpl{
 		Conn:  conn.Conn,

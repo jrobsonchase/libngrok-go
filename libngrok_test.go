@@ -639,3 +639,33 @@ func TestHeartbeatCallback(t *testing.T) {
 
 	require.Equal(t, 2, heartbeats, "should've seen some heartbeats")
 }
+
+func TestErrors(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	u, _ := url.Parse("notarealscheme://example.com")
+
+	_, err = Connect(ctx, ConnectOptions().WithProxyURL(u))
+	var proxyErr ErrProxyInit
+	require.ErrorIs(t, err, proxyErr)
+	require.ErrorAs(t, err, &proxyErr)
+
+	_, err = Connect(ctx, ConnectOptions().WithServer("127.0.0.234:123"))
+	var dialErr ErrSessionDial
+	require.ErrorIs(t, err, dialErr)
+	require.ErrorAs(t, err, &dialErr)
+
+	_, err = Connect(ctx, ConnectOptions().WithAuthToken("lolnope"))
+	var authErr ErrAuthFailed
+	require.ErrorIs(t, err, authErr)
+	require.ErrorAs(t, err, &authErr)
+	require.True(t, authErr.Context.Remote)
+
+	sess, err := Connect(ctx, ConnectOptions())
+	require.NoError(t, err)
+	_, err = sess.StartTunnel(ctx, TCPOptions())
+	var startErr ErrStartTunnel
+	require.ErrorIs(t, err, startErr)
+	require.ErrorAs(t, err, &startErr)
+	require.IsType(t, &TCPConfig{}, startErr.Context.Config)
+}

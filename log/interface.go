@@ -2,10 +2,18 @@ package log
 
 import (
 	"context"
-	"errors"
+	"fmt"
 )
 
 type LogLevel = int
+
+type ErrInvalidLogLevel struct {
+	Level any
+}
+
+func (e ErrInvalidLogLevel) Error() string {
+	return fmt.Sprintf("invalid log level: %v", e.Level)
+}
 
 const (
 	LogLevelTrace = 6
@@ -42,7 +50,7 @@ func StringFromLogLevel(lvl LogLevel) (string, error) {
 	case LogLevelNone:
 		return "none", nil
 	default:
-		return "invalid", errors.New("invalid log level")
+		return "invalid", ErrInvalidLogLevel{lvl}
 	}
 }
 
@@ -61,6 +69,6 @@ func LogLevelFromString(s string) (LogLevel, error) {
 	case "none":
 		return LogLevelNone, nil
 	default:
-		return 0, errors.New("invalid log level")
+		return 0, ErrInvalidLogLevel{s}
 	}
 }
