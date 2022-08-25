@@ -107,9 +107,7 @@ type ConnectConfig struct {
 }
 
 func ConnectOptions() *ConnectConfig {
-	return &ConnectConfig{
-		HeartbeatConfig: muxado.NewHeartbeatConfig(),
-	}
+	return &ConnectConfig{}
 }
 
 func (cfg *ConnectConfig) WithMetadata(meta string) *ConnectConfig {
@@ -155,11 +153,17 @@ func (cfg *ConnectConfig) WithCA(pool *x509.CertPool) *ConnectConfig {
 }
 
 func (cfg *ConnectConfig) WithHeartbeatTolerance(tolerance time.Duration) *ConnectConfig {
+	if cfg.HeartbeatConfig == nil {
+		cfg.HeartbeatConfig = muxado.NewHeartbeatConfig()
+	}
 	cfg.HeartbeatConfig.Tolerance = tolerance
 	return cfg
 }
 
 func (cfg *ConnectConfig) WithHeartbeatInterval(interval time.Duration) *ConnectConfig {
+	if cfg.HeartbeatConfig == nil {
+		cfg.HeartbeatConfig = muxado.NewHeartbeatConfig()
+	}
 	cfg.HeartbeatConfig.Interval = interval
 	return cfg
 }
@@ -237,6 +241,10 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 		} else {
 			dialer = netDialer
 		}
+	}
+
+	if cfg.HeartbeatConfig == nil {
+		cfg.HeartbeatConfig = muxado.NewHeartbeatConfig()
 	}
 
 	session := new(sessionImpl)

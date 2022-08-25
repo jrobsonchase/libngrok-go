@@ -68,9 +68,7 @@ type HTTPConfig struct {
 }
 
 func HTTPOptions() *HTTPConfig {
-	opts := &HTTPConfig{
-		Scheme: SchemeHTTPS,
-	}
+	opts := &HTTPConfig{}
 	opts.TLSCommon = TLSCommon[HTTPConfig]{
 		parent: opts,
 	}
@@ -238,6 +236,9 @@ func (http *HTTPConfig) toProtoConfig() *proto.HTTPOptions {
 }
 
 func (cfg *HTTPConfig) tunnelConfig() tunnelConfig {
+	if cfg.Scheme == "" {
+		cfg.Scheme = SchemeHTTPS
+	}
 	return tunnelConfig{
 		forwardsTo: cfg.ForwardsTo,
 		proto:      string(cfg.Scheme),
