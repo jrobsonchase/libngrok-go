@@ -38,6 +38,7 @@ func main() {
 			WithAuthToken(os.Getenv("NGROK_TOKEN")).
 			WithReconnectCookie(reconnectCookie).
 			WithServer(os.Getenv("NGROK_SERVER")).
+			WithRegion(os.Getenv("NGROK_REGION")).
 			WithLogger(log15adapter.NewLogger(logger)).
 			WithMetadata("Hello, world!").
 			WithRemoteCallbacks(libngrok.RemoteCallbacks{

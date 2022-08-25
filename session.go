@@ -38,6 +38,16 @@ type Session interface {
 	Latency() <-chan time.Duration
 }
 
+const (
+	RegionUS = "us"
+	RegionEU = "eu"
+	RegionSA = "sa"
+	RegionAP = "ap"
+	RegionAU = "au"
+	RegionJP = "jp"
+	RegionIN = "in"
+)
+
 //go:embed ngrok.ca.crt
 var defaultCACert []byte
 
@@ -124,6 +134,13 @@ func (cfg *ConnectConfig) WithResolver(resolver *net.Resolver) *ConnectConfig {
 
 func (cfg *ConnectConfig) WithAuthToken(token string) *ConnectConfig {
 	cfg.AuthToken = token
+	return cfg
+}
+
+func (cfg *ConnectConfig) WithRegion(region string) *ConnectConfig {
+	if region != "" {
+		cfg.ServerAddr = fmt.Sprintf("tunnel.%s.ngrok.com:443", region)
+	}
 	return cfg
 }
 
