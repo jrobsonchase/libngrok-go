@@ -30,12 +30,15 @@ func main() {
 	reconnectCookie := ""
 	hostname := ""
 
+	logger := log15.New()
+	logger.SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StderrHandler))
+
 	for {
 		opts := libngrok.ConnectOptions().
 			WithAuthToken(os.Getenv("NGROK_TOKEN")).
 			WithReconnectCookie(reconnectCookie).
 			WithServer(os.Getenv("NGROK_SERVER")).
-			WithLogger(log15adapter.NewLogger(log15.New())).
+			WithLogger(log15adapter.NewLogger(logger)).
 			WithMetadata("Hello, world!").
 			WithRemoteCallbacks(libngrok.RemoteCallbacks{
 				OnStop: func(sess libngrok.Session) error {
