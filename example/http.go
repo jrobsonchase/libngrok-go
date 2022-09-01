@@ -42,12 +42,12 @@ func main() {
 			WithLogger(log15adapter.NewLogger(logger)).
 			WithMetadata("Hello, world!").
 			WithRemoteCallbacks(libngrok.RemoteCallbacks{
-				OnStop: func(sess libngrok.Session) error {
+				OnStop: func(_ context.Context, sess libngrok.Session) error {
 					fmt.Println("got remote stop")
 					stopRequested = true
 					return nil
 				},
-				OnRestart: func(sess libngrok.Session) error {
+				OnRestart: func(_ context.Context, sess libngrok.Session) error {
 					fmt.Println("got remote restart")
 					return nil
 				},

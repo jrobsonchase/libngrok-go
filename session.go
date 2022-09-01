@@ -61,27 +61,37 @@ type Dialer interface {
 // Callbacks in response to local(ish) network events.
 type LocalCallbacks struct {
 	// Called any time a session (re)connects.
-	OnConnect func(sess Session)
+	OnConnect func(ctx context.Context, sess Session)
 	// Called any time a session disconnects.
 	// If the session has been closed locally, `OnDisconnect` will be called a
 	// final time with a `nil` `err`.
-	OnDisconnect func(sess Session, err error)
+	OnDisconnect func(ctx context.Context, sess Session, err error)
 	// Called any time an automatic heartbeat response is received.
 	// This does not include on-demand heartbeating via the `Session.Heartbeat`
 	// method.
-	OnHeartbeat func(sess Session, latency time.Duration)
+	OnHeartbeat func(ctx context.Context, sess Session, latency time.Duration)
 }
 
 // Callbacks in response to remote requests
 type RemoteCallbacks struct {
 	// Called when a stop is requested via the dashboard or API.
 	// If it returns nil, success will be reported and the session closed.
-	OnStop func(sess Session) error
+	OnStop func(ctx context.Context, sess Session) error
 	// Called when a restart is requested via the dashboard or API.
 	// If it returns nil, success will be reported and the session closed.
 	// It is the implementer's responsibility to ensure that the application
 	// recreates the session.
-	OnRestart func(sess Session) error
+	OnRestart func(ctx context.Context, sess Session) error
+	// Called when an update is requested via the dashboard or API.
+	// If it returns nil, success will be reported. Any other semantics are left
+	// up to the application, as automatic library updates aren't possible.
+	OnUpdate func(ctx context.Context, sess Session) error
+}
+
+type CallbackErrors struct {
+	UpdateUnsupported  string
+	RestartUnsupported string
+	StopUnsupported    string
 }
 
 type ConnectConfig struct {
@@ -100,6 +110,8 @@ type ConnectConfig struct {
 
 	LocalCallbacks  LocalCallbacks
 	RemoteCallbacks RemoteCallbacks
+
+	CallbackErrors CallbackErrors
 
 	Cookie string
 
@@ -271,14 +283,27 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 
 	empty := ""
 	notImplemented := "not implemented"
-	notSupported := "libraries don't support remote updates"
 
-	var remoteStopErr, remoteRestartErr = &notImplemented, &notImplemented
+	var remoteStopErr, remoteRestartErr, remoteUpdateErr = &notImplemented, &notImplemented, &notImplemented
+
+	if cfg.CallbackErrors.StopUnsupported != "" {
+		remoteStopErr = &cfg.CallbackErrors.StopUnsupported
+	}
+	if cfg.CallbackErrors.UpdateUnsupported != "" {
+		remoteUpdateErr = &cfg.CallbackErrors.UpdateUnsupported
+	}
+	if cfg.CallbackErrors.RestartUnsupported != "" {
+		remoteRestartErr = &cfg.CallbackErrors.RestartUnsupported
+	}
+
 	if cfg.RemoteCallbacks.OnStop != nil {
 		remoteStopErr = &empty
 	}
 	if cfg.RemoteCallbacks.OnRestart != nil {
 		remoteRestartErr = &empty
+	}
+	if cfg.RemoteCallbacks.OnUpdate != nil {
+		remoteUpdateErr = &empty
 	}
 
 	auth := proto.AuthExtra{
@@ -292,7 +317,7 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 
 		RestartUnsupportedError: remoteRestartErr,
 		StopUnsupportedError:    remoteStopErr,
-		UpdateUnsupportedError:  &notSupported,
+		UpdateUnsupportedError:  remoteUpdateErr,
 
 		Cookie: cfg.Cookie,
 
@@ -326,7 +351,7 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 						if !ok {
 							return
 						}
-						cfg.LocalCallbacks.OnHeartbeat(session, latency)
+						cfg.LocalCallbacks.OnHeartbeat(ctx, session, latency)
 					}
 				}
 			}()
@@ -349,7 +374,7 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 	}
 
 	if cfg.LocalCallbacks.OnConnect != nil {
-		cfg.LocalCallbacks.OnConnect(session)
+		cfg.LocalCallbacks.OnConnect(ctx, session)
 	}
 
 	go func() {
@@ -361,15 +386,15 @@ func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 				if !ok {
 					if cfg.LocalCallbacks.OnDisconnect != nil {
 						cfg.Logger.Info("no more state changes")
-						cfg.LocalCallbacks.OnDisconnect(session, nil)
+						cfg.LocalCallbacks.OnDisconnect(ctx, session, nil)
 					}
 					return
 				}
 				if err == nil && cfg.LocalCallbacks.OnConnect != nil {
-					cfg.LocalCallbacks.OnConnect(session)
+					cfg.LocalCallbacks.OnConnect(ctx, session)
 				}
 				if err != nil && cfg.LocalCallbacks.OnDisconnect != nil {
-					cfg.LocalCallbacks.OnDisconnect(session, err)
+					cfg.LocalCallbacks.OnDisconnect(ctx, session, err)
 				}
 			}
 		}
@@ -458,7 +483,7 @@ func (rc remoteCallbackHandler) OnStop(_ *proto.Stop, respond tunnel_client.Hand
 	if rc.cb.OnStop != nil {
 		resp := new(proto.StopResp)
 		close := true
-		if err := rc.cb.OnStop(rc.sess); err != nil {
+		if err := rc.cb.OnStop(context.TODO(), rc.sess); err != nil {
 			close = false
 			resp.Error = err.Error()
 		}
@@ -475,7 +500,7 @@ func (rc remoteCallbackHandler) OnRestart(_ *proto.Restart, respond tunnel_clien
 	if rc.cb.OnRestart != nil {
 		resp := new(proto.RestartResp)
 		close := true
-		if err := rc.cb.OnRestart(rc.sess); err != nil {
+		if err := rc.cb.OnRestart(context.TODO(), rc.sess); err != nil {
 			close = false
 			resp.Error = err.Error()
 		}
@@ -486,6 +511,16 @@ func (rc remoteCallbackHandler) OnRestart(_ *proto.Restart, respond tunnel_clien
 			_ = rc.sess.Close()
 		}
 	}
-
 }
-func (rc remoteCallbackHandler) OnUpdate(*proto.Update, tunnel_client.HandlerRespFunc) {}
+
+func (rc remoteCallbackHandler) OnUpdate(_ *proto.Update, respond tunnel_client.HandlerRespFunc) {
+	if rc.cb.OnUpdate != nil {
+		resp := new(proto.UpdateResp)
+		if err := rc.cb.OnUpdate(context.TODO(), rc.sess); err != nil {
+			resp.Error = err.Error()
+		}
+		if err := respond(resp); err != nil {
+			rc.Warn("error responding to restart request", "error", err)
+		}
+	}
+}
