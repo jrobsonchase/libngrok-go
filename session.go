@@ -214,6 +214,11 @@ func (cfg *ConnectConfig) WithReconnectCookie(cookie string) *ConnectConfig {
 	return cfg
 }
 
+func (cfg *ConnectConfig) WithCallbackErrors(errs CallbackErrors) *ConnectConfig {
+	cfg.CallbackErrors = errs
+	return cfg
+}
+
 func Connect(ctx context.Context, cfg *ConnectConfig) (Session, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = log15.New()
